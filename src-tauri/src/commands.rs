@@ -446,6 +446,10 @@ pub fn create_meeting(state: State<AppState>, title: Option<String>) -> R<Meetin
 #[tauri::command]
 pub fn update_meeting(app: AppHandle, state: State<AppState>, id: String, field: String, value: String) -> R<()> {
     state.store.set_field(&id, &field, &value).map_err(e)?;
+    if field == "enhanced" {
+        // Mark the AI notes as edited by the user (export/agents label them; Regenerate asks first).
+        state.store.set_field(&id, "enhanced_edited", "1").map_err(e)?;
+    }
     crate::export::schedule(&app, &id);
     Ok(())
 }
@@ -489,6 +493,8 @@ pub fn rename_speaker(app: AppHandle, state: State<AppState>, id: String, key: S
     crate::export::schedule(&app, &id);
     let mut m = state.store.get_meeting(&id).map_err(e)?.ok_or("not found")?;
     let name = name.trim().to_string();
+    // Naming (or confirming) a speaker by hand clears the AI's guess.
+    m.speakers_guessed.retain(|k| *k != key);
     if let Some((other, _)) = m.speakers.iter().find(|(k, v)| **k != key && v.eq_ignore_ascii_case(&name) && !name.is_empty()) {
         let other = other.clone();
         state.store.reassign_speaker(&id, &key, &other).map_err(e)?;
@@ -498,6 +504,7 @@ pub fn rename_speaker(app: AppHandle, state: State<AppState>, id: String, key: S
     } else {
         m.speakers.insert(key, name);
     }
+    state.store.set_field(&id, "speakers_guessed", &serde_json::to_string(&m.speakers_guessed).map_err(e)?).map_err(e)?;
     state.store.set_field(&id, "speakers", &serde_json::to_string(&m.speakers).map_err(e)?).map_err(e)
 }
 
@@ -509,8 +516,30 @@ pub async fn start_recording(app: AppHandle, id: String) -> R<()> {
 }
 
 #[tauri::command]
-pub fn stop_recording(app: AppHandle) -> R<()> {
-    recorder::stop(&app, true).map_err(e)
+pub fn stop_recording(app: AppHandle, ai: Option<bool>) -> R<()> {
+    // `ai: false` skips the after-meeting AI pass (the onboarding mic test).
+    recorder::stop(&app, ai.unwrap_or(true)).map_err(e)
+}
+
+/// Turn auto-record off (switch to "notify me"), from the sidebar marker, banner or tray.
+#[tauri::command]
+pub fn turn_off_auto_record(app: AppHandle) -> R<Settings> {
+    crate::tray::turn_off_auto_record(&app).map_err(e)?;
+    Ok(redacted(app.state::<AppState>().settings()))
+}
+
+#[tauri::command]
+pub fn autostart_get(app: AppHandle) -> bool {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().unwrap_or(false)
+}
+
+#[tauri::command]
+pub fn autostart_set(app: AppHandle, on: bool) -> R<bool> {
+    use tauri_plugin_autostart::ManagerExt;
+    let l = app.autolaunch();
+    if on { l.enable() } else { l.disable() }.map_err(e)?;
+    Ok(l.is_enabled().unwrap_or(on))
 }
 
 #[tauri::command]
@@ -561,8 +590,14 @@ pub async fn identify_speakers(app: AppHandle, id: String) -> R<()> {
             .ok_or_else(|| anyhow::anyhow!("No other speakers in this meeting."))?;
         let map = llm::parse_speaker_map(&llm::complete(p, &model, &sys, &prompt)?);
         anyhow::ensure!(!map.is_empty(), "Couldn't tell who's who from the conversation — name speakers by clicking them.");
+        for k in map.keys() {
+            if !m.speakers_guessed.contains(k) {
+                m.speakers_guessed.push(k.clone());
+            }
+        }
         m.speakers.extend(map);
         state.store.set_field(&id, "speakers", &serde_json::to_string(&m.speakers)?)?;
+        state.store.set_field(&id, "speakers_guessed", &serde_json::to_string(&m.speakers_guessed)?)?;
         let _ = app.emit("meeting-updated", json!({"id": id}));
         crate::export::schedule(&app, &id);
         Ok(())

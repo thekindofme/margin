@@ -4,10 +4,11 @@ Local-first AI meeting notes for macOS, written in Rust. An open-source alternat
 
 - **Listens on your Mac.** It captures your mic ("Me") and system audio (everyone else on the call), then transcribes live with an **open-weights model you download once**. The model choice follows Handy: Parakeet v2/v3, Canary, Cohere Transcribe, Whisper, Moonshine and SenseVoice. Audio is never uploaded, and it's only kept on disk if you turn on **Keep recordings**.
 - **Knows who's talking.** A local speaker-embedding model (WeSpeaker ResNet34) separates the remote voices. Names come from the calendar invite and from cues in the conversation ("thanks, Priya"), and you can rename or merge speakers with a click.
-- **Hooks into your calendar.** It reads the calendars already synced to macOS (iCloud, Google, Exchange) through EventKit. You get a notification as a meeting starts, or it can record automatically. It stops when the meeting is over and the room goes quiet. It also notices unscheduled Zoom, Teams, Webex, Slack and FaceTime calls that are using the mic.
-- **Writes your notes with the AI you already pay for.** It uses **Claude Haiku** through the Claude Code CLI or **Codex Luna** through the Codex CLI, reusing their existing subscription logins. A fully offline Ollama option is also available. No API keys are needed.
+- **Hooks into your calendar.** It reads the calendars already synced to macOS (iCloud, Google, Exchange) through EventKit. You get a notification (and a "Next: … · Start notes" item in the menu bar) as a meeting starts, or it can record automatically. While auto-record is on, Margin shows it in the sidebar and menu bar, with a one-click "Turn off". It stops when the meeting is over and the room goes quiet. It also notices unscheduled Zoom, Teams, Webex, Slack and FaceTime calls that are using the mic.
+- **Writes your notes with the AI you already pay for.** It uses **Claude Haiku** through the Claude Code CLI or **Codex Luna** through the Codex CLI, reusing their existing subscription logins. A fully offline Ollama option is also available. No API keys are needed. You choose the provider once during setup and Margin remembers it. Until you do, nothing is sent anywhere and notes aren't written.
 - **Granola-style workflow:**
   - Jot rough notes during the call. Afterwards Margin expands them with detail from the transcript, using templates for 1:1s, stand-ups, customer calls, interviews and more.
+  - The AI notes are yours to edit: action items tick off, and the note says which model wrote it. Speaker names the AI guessed are marked until you confirm them.
   - Ask questions about the meeting ("draft a follow-up email").
   - Search across every note and transcript.
   - Export notes as Markdown.

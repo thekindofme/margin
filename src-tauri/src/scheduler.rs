@@ -148,7 +148,7 @@ fn tick(app: &AppHandle, call_seen_at: &mut Option<Instant>) {
             let _ = state.store.set_event_flag(&ev.id, "prompted");
             if s.calendar_mode == "auto" {
                 match start_for_event(app, &ev) {
-                    Ok(()) => recorder::notify(app, &format!("Taking notes: {}", ev.title), "Margin started transcribing on this Mac."),
+                    Ok(()) => recorder::auto_started(app, &ev),
                     Err(e) => recorder::notify(app, &ev.title, &format!("Couldn't start recording: {e}")),
                 }
             } else {

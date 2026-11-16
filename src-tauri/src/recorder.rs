@@ -134,6 +134,7 @@ pub fn emit_rec_state(app: &AppHandle) {
             "elapsed_ms": r.offset_ms + r.session.elapsed_ms(),
             "system_audio": r.session.system_active,
             "event_end": r.event_end,
+            "auto": state.auto_recording.lock().as_deref() == Some(r.meeting_id.as_str()),
         }),
         None => json!({"recording": false}),
     };
@@ -208,6 +209,7 @@ pub fn start(app: &AppHandle, meeting_id: &str, event_end: Option<DateTime<Utc>>
 pub fn stop(app: &AppHandle, run_ai: bool) -> Result<()> {
     let state = app.state::<AppState>();
     let Some(rec) = state.recording.lock().take() else { return Ok(()) };
+    *state.auto_recording.lock() = None;
     emit_rec_state(app);
     let _ = app.emit("rec-state", json!({"recording": false, "finishing": rec.meeting_id}));
     let app2 = app.clone();
@@ -221,7 +223,8 @@ pub fn stop(app: &AppHandle, run_ai: bool) -> Result<()> {
         let _ = app2.emit("meeting-updated", json!({"id": id}));
         emit_rec_state(&app2);
         crate::export::schedule(&app2, &id);
-        if run_ai && state.settings().auto_enhance {
+        // No AI provider chosen yet: never pick one implicitly. The note asks the user instead.
+        if run_ai && state.settings().auto_enhance && state.settings().provider.is_some() {
             if let Err(e) = after_meeting(&app2, &id) {
                 let _ = app2.emit("warning", format!("AI notes: {e}"));
             }
@@ -248,16 +251,31 @@ pub fn stop_and_wait(app: &AppHandle, timeout: std::time::Duration) {
     }
 }
 
+/// The AI the user chose to write notes. Never falls back to whatever CLI happens to be signed
+/// in: nothing leaves the Mac until the user has picked a provider.
 pub fn provider(state: &AppState) -> Result<(llm::Provider, String)> {
     let s = state.settings();
-    if let Some(p) = s.provider {
-        return Ok((p, s.provider_model));
+    s.provider
+        .map(|p| (p, s.provider_model))
+        .ok_or_else(|| anyhow!("Choose who writes your notes first (Settings → AI notes)."))
+}
+
+/// Auto-record started a meeting: say so loudly (notification + in-app banner).
+pub fn auto_started(app: &AppHandle, ev: &CalEvent) {
+    let state = app.state::<AppState>();
+    let id = state.recording.lock().as_ref().map(|r| r.meeting_id.clone());
+    *state.auto_recording.lock() = id.clone();
+    let title = if ev.title.trim().is_empty() { "Untitled meeting" } else { ev.title.trim() };
+    notify(app, &format!("Recording automatically: {title}"), "Auto-record is on. Stop or turn it off from the menu bar or the Margin window.");
+    let _ = app.emit("auto-recording", json!({"meeting_id": id, "title": title}));
+    emit_rec_state(app);
+}
+
+/// Pin the selftests to a signed-in provider (the app itself never picks one implicitly).
+fn selftest_provider(s: &mut crate::state::Settings) {
+    if s.provider.is_none() {
+        s.provider = llm::detect().into_iter().find(|p| p.available && p.signed_in).map(|p| p.id);
     }
-    let list = state.providers.lock().clone().unwrap_or_else(llm::detect);
-    list.iter()
-        .find(|p| p.available && p.signed_in)
-        .map(|p| (p.id, String::new()))
-        .ok_or_else(|| anyhow!("No AI is set up. Sign in to Claude Code or Codex, or run Ollama, then pick it in Settings."))
 }
 
 fn set_busy(app: &AppHandle, id: &str, what: Option<&str>) {
@@ -285,12 +303,19 @@ pub fn after_meeting(app: &AppHandle, id: &str) -> Result<()> {
         set_busy(app, id, Some("Recognising speakers"));
         if let Some((sys, prompt)) = llm::speaker_names_prompt(&m, &segments) {
             if let Ok(out) = llm::complete(p, &model, &sys, &prompt) {
-                let mut saved = state.store.get_meeting(id)?.map(|x| x.speakers).unwrap_or_default();
+                let cur = state.store.get_meeting(id)?.unwrap_or_default();
+                let (mut saved, mut guessed) = (cur.speakers, cur.speakers_guessed);
                 for (k, v) in llm::parse_speaker_map(&out) {
-                    saved.entry(k.clone()).or_insert(v.clone());
+                    if !saved.contains_key(&k) {
+                        saved.insert(k.clone(), v.clone());
+                        if !guessed.contains(&k) {
+                            guessed.push(k.clone());
+                        }
+                    }
                     m.speakers.entry(k).or_insert(v);
                 }
                 state.store.set_field(id, "speakers", &serde_json::to_string(&saved)?)?;
+                state.store.set_field(id, "speakers_guessed", &serde_json::to_string(&guessed)?)?;
                 let _ = app.emit("meeting-updated", json!({"id": id}));
             }
         }
@@ -340,6 +365,7 @@ pub fn enhance(app: &AppHandle, m: &Meeting, segments: &[Segment], p: llm::Provi
         llm::Provider::Ollama => format!("ollama:{model}"),
     };
     state.store.set_field(&m.id, "enhanced_by", &by)?;
+    state.store.set_field(&m.id, "enhanced_edited", "0")?;
     crate::export::schedule(app, &m.id);
     let _ = app.emit("meeting-updated", json!({"id": m.id}));
     Ok(out)
@@ -354,6 +380,7 @@ pub fn selftest(app: AppHandle, dir: std::path::PathBuf) {
             let mut s = state.settings();
             s.model_id = Some(std::env::var("MARGIN_SELFTEST_MODEL").unwrap_or_else(|_| "parakeet-v2".into()));
             s.user_name = "Alex".into();
+            selftest_provider(&mut s);
             state.save_settings(s)?;
             let engine = ensure_engine(&state)?;
             let embedder = ensure_embedder(&app);
@@ -466,6 +493,7 @@ pub fn calendar_selftest(app: AppHandle, secs: i64) {
     if s.model_id.is_none() {
         s.model_id = Some("parakeet-v2".into());
     }
+    selftest_provider(&mut s);
     let _ = state.save_settings(s);
     let now = Utc::now();
     let ev = CalEvent {

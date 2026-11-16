@@ -4,6 +4,7 @@
   const now = Date.now();
   const iso = (ms) => new Date(ms).toISOString();
   const listeners = {};
+  const flag = (f) => location.hash.slice(1).split(",").includes(f);
   const emit = (ev, payload) => (listeners[ev] || []).forEach((f) => f({ payload }));
   const people = [
     { name: "Priya Shah", email: "priya@acme.co", is_self: false },
@@ -18,21 +19,22 @@
     [24600, "me", "Sounds good. I'll update the onboarding copy before then."],
   ].map(([t, sp, text], i) => ({ id: i + 1, start_ms: t, end_ms: t + 4800, source: sp === "me" ? "mic" : "system", speaker: sp, text }));
   const db = {
-    settings: { model_id: "parakeet-v2", language: "auto", provider: null, provider_model: "", capture_system: true, mic_device: null, calendar_mode: "notify", auto_stop: true, detect_calls: true, only_real_meetings: true, auto_enhance: true, diarize: true, default_template: "auto", user_name: "Alex", onboarded: location.hash !== "#onboarding" },
+    settings: { model_id: "parakeet-v2", language: "auto", provider: flag("noai") || flag("onboarding") ? null : "claude", provider_model: "", capture_system: true, mic_device: null, calendar_mode: flag("auto") ? "auto" : "notify", auto_stop: true, detect_calls: true, only_real_meetings: true, auto_enhance: true, diarize: true, default_template: "auto", user_name: "Alex", onboarded: !flag("onboarding") },
     meetings: [
-      { id: "m1", title: "Beta launch sync", created_at: iso(now - 3600e3), started_at: null, ended_at: null, duration_ms: 1860000, event_id: null, attendees: people, notes: "beta date?\nQA timeline\ncopy", enhanced: "### Beta launch\n- Beta ships **Friday**; scope freezes tomorrow\n- QA needs until Thursday for the regression pass\n- Design is effectively complete\n\n### Action items\n- [ ] Sam — write release notes (before Friday)\n- [ ] Alex — update onboarding copy\n- [ ] Priya — confirm scope freeze with eng", template: "team", status: "done", speakers: { s1: "Priya Shah", s2: "Sam Okafor" }, clusterer: null, meeting_url: "https://zoom.us/j/123" },
+      { id: "m1", title: "Beta launch sync", created_at: iso(now - 3600e3), started_at: null, ended_at: null, duration_ms: 1860000, event_id: null, attendees: people, notes: "beta date?\nQA timeline\ncopy", enhanced: "### Beta launch\n- Beta ships **Friday**; scope freezes tomorrow\n- QA needs until Thursday for the regression pass\n- Design is effectively complete\n\n### Action items\n- [ ] Sam — write release notes (before Friday)\n- [ ] Alex — update onboarding copy\n- [ ] Priya — confirm scope freeze with eng", template: "team", status: "done", speakers: { s1: "Priya Shah", s2: "Sam Okafor" }, speakers_guessed: ["s2"], enhanced_by: "claude:haiku", stt_model: "parakeet-v2", enhanced_edited: false, clusterer: null, meeting_url: "https://zoom.us/j/123" },
       { id: "m2", title: "1:1 with Dana", created_at: iso(now - 26 * 3600e3), duration_ms: 1500000, attendees: [], notes: "", enhanced: "### Updates\n- Hiring loop for the infra role closes next week", template: "one_on_one", status: "done", speakers: {}, meeting_url: null },
       { id: "m3", title: "Customer call — Northwind", created_at: iso(now - 4 * 86400e3), duration_ms: 2700000, attendees: [], notes: "pricing pushback", enhanced: "", template: "customer", status: "done", speakers: {}, meeting_url: null },
+      { id: "m4", title: "Hiring sync", created_at: iso(now - 5 * 86400e3), duration_ms: 900000, attendees: [], notes: "", enhanced: "", template: "auto", status: "done", speakers: {}, meeting_url: null },
     ],
-    segments: { m1: segs, m2: [], m3: [] },
+    segments: { m1: segs, m2: [], m3: [], m4: segs.slice(0, 3) },
     chats: { m1: [] },
   };
   const models = [
     ["parakeet-v2", "Parakeet TDT 0.6B v2", "The sharpest English model for everyday meetings", 451, ["en"], 0.86, 0.86, false, true, true],
     ["parakeet-v3", "Parakeet TDT 0.6B v3", "Fast, accurate notes in 25 European languages", 456, ["en", "de", "fr"], 0.82, 0.86, false, true, true],
-    ["canary-180m-flash", "Canary 180M Flash", "Tiny and instant, runs well on any hardware", 146, ["en", "de", "es", "fr"], 0.75, 0.92, true, true, true],
-    ["cohere", "Cohere Transcribe", "Highest accuracy, 14 languages, slower", 1708, Array(14).fill("x"), 0.92, 0.55, false, false, true],
-    ["whisper-medium", "Whisper Medium", "Broadest language coverage, a little slower", 469, Array(99).fill("x"), 0.78, 0.45, true, false, true],
+    ["canary-180m-flash", "Canary 180M Flash", "Tiny and instant, runs well on any hardware", 146, ["en", "de", "es", "fr"], 0.75, 0.92, true, true, false],
+    ["whisper-medium", "Whisper Medium", "Broadest language coverage, a little slower", 469, Array(99).fill("x"), 0.78, 0.45, true, false, false],
+    ["moonshine-base", "Moonshine Base", "Small and quick for English on older Macs", 61, ["en"], 0.7, 0.95, false, true, false],
   ].map(([id, name, tagline, size_mb, languages, accuracy, speed, translate, live, recommended], i) => ({ id, name, tagline, size_mb, languages, accuracy, speed, translate, live, recommended, downloaded: i === 0, language_label: languages.length === 1 ? "English only" : `${languages.length} languages` }));
   const events = [
     { event: { id: "e1", title: "Design review", start: iso(now - 2 * 60e3), end: iso(now + 28 * 60e3), attendees: people, location: null, meeting_url: "https://meet.google.com/abc", calendar: "Work", calendar_color: null, all_day: false }, real: true, meeting_id: null },
@@ -43,7 +45,7 @@
     save_settings: ({ settings }) => (db.settings = settings),
     permissions: () => ({ microphone: "granted", system_audio: "granted", calendar: "granted", notifications: "not_determined" }),
     grant_permission: ({ kind }) => ({ status: "not_determined", opened_settings: true }),
-    current_prompt: () => (location.hash === "#prompt" ? { kind: "calendar", title: "Design review", event: events[0].event, app: null, at: iso(now) } : null),
+    current_prompt: () => (flag("prompt") ? { kind: "calendar", title: "Design review", event: events[0].event, app: null, at: iso(now) } : null),
     list_meetings: ({ query }) => db.meetings.filter((m) => !query || m.title.toLowerCase().includes(query.toLowerCase())).map((m) => ({ ...m, snippet: m.enhanced.slice(0, 200) })),
     list_models: () => ({ models, active: db.settings.model_id, downloading: [], speaker_model: true }),
     upcoming_events: () => events,
@@ -56,8 +58,15 @@
       templates: [{ id: "auto", name: "Auto" }, { id: "one_on_one", name: "1:1" }, { id: "team", name: "Team meeting" }, { id: "customer", name: "Customer call" }],
     }),
     get_meeting: ({ id }) => ({ meeting: db.meetings.find((m) => m.id === id), segments: db.segments[id] || [], chats: db.chats[id] || [], busy: null }),
-    create_meeting: () => { const m = { id: "n" + Date.now(), title: "", created_at: iso(Date.now()), duration_ms: 0, attendees: [], notes: "", enhanced: "", template: "auto", status: "draft", speakers: {}, meeting_url: null }; db.meetings.unshift(m); db.segments[m.id] = []; return m; },
-    update_meeting: ({ id, field, value }) => { db.meetings.find((m) => m.id === id)[field] = value; },
+    create_meeting: ({ title }) => { const m = { id: "n" + Date.now(), title: title || "", created_at: iso(Date.now()), duration_ms: 0, attendees: [], notes: "", enhanced: "", template: "auto", status: "draft", speakers: {}, meeting_url: null }; db.meetings.unshift(m); db.segments[m.id] = []; return m; },
+    update_meeting: ({ id, field, value }) => { const m = db.meetings.find((x) => x.id === id); m[field] = value; if (field === "enhanced") m.enhanced_edited = true; },
+    delete_meeting: ({ id }) => { db.meetings = db.meetings.filter((m) => m.id !== id); },
+    rename_speaker: ({ id, key, name }) => { const m = db.meetings.find((x) => x.id === id); m.speakers_guessed = (m.speakers_guessed || []).filter((k) => k !== key); if (name.trim()) m.speakers[key] = name.trim(); else delete m.speakers[key]; },
+    enhance: async ({ id }) => { await new Promise((r) => setTimeout(r, 700)); const m = db.meetings.find((x) => x.id === id); m.enhanced = "### Summary\n- Regenerated notes\n\n### Action items\n- [ ] Follow up"; m.enhanced_by = "claude:haiku"; m.enhanced_edited = false; return m.enhanced; },
+    turn_off_auto_record: () => { db.settings.calendar_mode = "notify"; return db.settings; },
+    autostart_get: () => db.autostart ?? false,
+    autostart_set: ({ on }) => (db.autostart = on),
+    dismiss_prompt: () => null,
     ask_all: async () => { await new Promise(r=>setTimeout(r,600)); return "- The beta ships **Friday** (Beta launch sync, Sat 31 Oct)\n- Sam owns the release notes"; },
     agents_status: () => ({ cli_bundled: true, cli_installed: false, cli_path: "~/.local/bin/margin", claude_available: true, claude_connected: true, codex_available: true, codex_connected: false }),
     agent_connect: () => "Connected",
@@ -71,8 +80,22 @@
     obsidian_vaults: () => [{name:"second-brain", path:"~/Notes/second-brain"}],
     obsidian_export_all: () => 12,
     input_devices: () => ["MacBook Air Microphone"],
-    rec_state: () => emit("rec-state", location.hash === "#rec" ? { recording: true, meeting_id: "m1", paused: false, elapsed_ms: 754000, system_audio: true } : { recording: false }),
-    start_recording: ({ id }) => emit("rec-state", { recording: true, meeting_id: id, paused: false, elapsed_ms: 0, system_audio: true }),
+    rec_state: () => {
+      const rec = flag("rec") || flag("auto");
+      emit("rec-state", rec ? { recording: true, meeting_id: "m1", paused: false, elapsed_ms: 754000, system_audio: true, auto: flag("auto") } : { recording: false });
+      if (flag("auto")) emit("auto-recording", { meeting_id: "m1", title: "Beta launch sync" });
+    },
+    start_recording: ({ id }) => {
+      emit("rec-state", { recording: true, meeting_id: id, paused: false, elapsed_ms: 0, system_audio: true });
+      // Fake live transcript lines so the onboarding test and live views have something to show.
+      clearTimeout(db.fakeT);
+      const lines = ["Testing, testing, one two three.", "Today I'm working on the onboarding flow.", "Margin should pick this up on its own."];
+      lines.forEach((text, i) => setTimeout(() => {
+        const seg = { id: 100 + i, start_ms: 1500 + i * 3500, end_ms: 4500 + i * 3500, source: "mic", speaker: "me", text };
+        (db.segments[id] ||= []).push(seg);
+        emit("segment", { meeting_id: id, segment: seg });
+      }, 1600 + i * 2200));
+    },
     stop_recording: () => emit("rec-state", { recording: false }),
     ask: ({ id, question }) => { (db.chats[id] ||= []).push({ role: "user", content: question }, { role: "assistant", content: "- Beta ships **Friday**\n- Scope freezes tomorrow" }); return ""; },
   };

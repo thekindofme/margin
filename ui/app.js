@@ -98,7 +98,9 @@ function speakerName(key, m) {
 }
 
 // Small, safe Markdown renderer (headings, lists, tasks, bold, italics, code, quotes).
-function md(src) {
+// With { tasks: true } checkboxes are live and carry their source line (data-line).
+const TASK_RE = /^(\s*[-*]\s+\[)( |x|X)(\]\s+)(.*)/;
+function md(src, opts = {}) {
   const inline = (t) => esc(t)
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
@@ -106,14 +108,16 @@ function md(src) {
   const out = [];
   let list = false;
   const close = () => { if (list) { out.push("</ul>"); list = false; } };
-  for (const raw of String(src || "").split("\n")) {
-    const line = raw.trimEnd();
+  const lines = String(src || "").split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trimEnd();
     let m;
     if (!line.trim()) { close(); continue; }
     if ((m = line.match(/^#{1,6}\s+(.*)/))) { close(); out.push(`<h3>${inline(m[1])}</h3>`); continue; }
-    if ((m = line.match(/^\s*[-*]\s+\[( |x|X)\]\s+(.*)/))) {
+    if ((m = line.match(TASK_RE))) {
       if (!list) { out.push("<ul>"); list = true; }
-      out.push(`<li class="task"><input type="checkbox" ${m[1] !== " " ? "checked" : ""} disabled>${inline(m[2])}</li>`);
+      const done = m[2] !== " ";
+      out.push(`<li class="task ${done ? "done" : ""}"><label><input type="checkbox" ${done ? "checked" : ""} ${opts.tasks ? `data-line="${i}"` : "disabled"}><span>${inline(m[4])}</span></label></li>`);
       continue;
     }
     if ((m = line.match(/^\s*(?:[-*•]|\d+[.)])\s+(.*)/))) {
@@ -145,8 +149,10 @@ async function openMeeting(id, tab) {
   if (tab) S.tab = tab;
   S.detail = await invoke("get_meeting", { id });
   S.detail.audio = await invoke("meeting_audio", { id }).catch(() => []);
-  if (!tab) S.tab = S.rec.recording && S.rec.meeting_id === id ? "notes" : S.detail.meeting.enhanced ? "notes" : (S.detail.segments.length ? "transcript" : "notes");
+  if (!tab) S.tab = S.rec.recording && S.rec.meeting_id === id ? "notes" : S.detail.meeting.enhanced ? "notes" : (S.detail.segments.length && S.settings?.provider ? "transcript" : "notes");
   S.showMine = false;
+  S.editingAi = null;
+  S.confirmRegen = null;
   render();
   renderSidebar();
 }
@@ -258,13 +264,37 @@ function renderSysWarn() {
   const fx = $("#sysFix");
   if (fx) fx.onclick = () => openPermsSheet(S.sysWarn === "mic-perm" ? "Margin needs your microphone" : "Hear everyone on the call");
 }
-function renderBanner() {
+function autoBannerHtml() {
+  const m = S.meetings.find((x) => x.id === S.rec.meeting_id);
+  const title = S.autoTitle || m?.title || "your meeting";
+  return `<div class="banner auto">
+    <span class="rec-badge"><span class="rec-dot"></span>REC</span>
+    <div class="b-text">
+      <div class="b-title">Recording automatically: ${esc(title)}</div>
+      <div class="b-sub">${S.settings?.calendar_mode === "auto" ? "Auto-record started this from your calendar." : "Auto-record is now off; this recording keeps going until you stop it."}</div>
+    </div>
+    <button class="btn ember small" id="bStop">${ICON.stop} Stop</button>
+    ${S.settings?.calendar_mode === "auto" ? `<button class="btn small" id="bAutoOff">Turn off auto-record</button>` : ""}
+    <button class="icon-btn" id="bHide" title="Hide">×</button>
+  </div>`;
+}
+
+function renderBanner(force) {
   const b = $("#banner");
   const p = S.prompt;
-  const key = p && !S.rec.recording ? `${p.kind}|${p.title}|${p.at}` : "";
-  if (b.dataset.key === key) return; // unchanged: don't replay the entrance animation
+  const auto = S.rec.recording && S.rec.auto && S.autoHidden !== S.rec.meeting_id;
+  const key = auto ? `auto|${S.rec.meeting_id}|${S.settings?.calendar_mode}|${S.autoTitle || ""}` : p && !S.rec.recording ? `${p.kind}|${p.title}|${p.at}` : "";
+  if (b.dataset.key === key && !force) return; // unchanged: don't replay the entrance animation
   b.dataset.key = key;
   if (!key) { b.innerHTML = ""; return; }
+  if (auto) {
+    b.innerHTML = autoBannerHtml();
+    $("#bStop").onclick = () => invoke("stop_recording").catch(fail);
+    const off = $("#bAutoOff");
+    if (off) off.onclick = turnOffAutoRecord;
+    $("#bHide").onclick = () => { S.autoHidden = S.rec.meeting_id; renderBanner(); };
+    return;
+  }
   const who = p.event ? p.event.attendees.filter((a) => !a.is_self).map((a) => a.name).slice(0, 4).join(", ") : "";
   b.innerHTML = `<div class="banner">
     <span class="rec-dot"></span>
@@ -310,7 +340,7 @@ function renderHome(v) {
     <p class="hello-sub">${S.rec.recording ? "Margin is listening." : evs.length ? `${evs.length} meeting${evs.length > 1 ? "s" : ""} coming up.` : "Your notes, kept on this Mac."}</p>`;
   const missing = ["microphone", "system_audio", "calendar"].filter((k) => S.perms && S.perms[k] !== "granted");
   if (missing.length) h += `<div class="callout setup">${ICON.spark}<div style="flex:1">Margin can't hear everything yet — ${missing.length} permission${missing.length > 1 ? "s" : ""} to go.</div><button class="btn small ember" id="setupPerms">Finish setup</button></div><div style="height:14px"></div>`;
-  h += `<label class="ask-all">${ICON.spark}<input id="askAll" placeholder="Ask across all your meetings…" value="${esc(S.homeQ || "")}" /></label>`;
+  h += `<label class="ask-all">${ICON.spark}<input id="askAll" placeholder="Ask your recent meetings…" value="${esc(S.homeQ || "")}" /></label>`;
   if (S.homeAsking) h += `<div class="answer"><span class="busy"><span class="spinner"></span>Reading your meetings…</span></div>`;
   else if (S.homeAnswer) h += `<div class="answer md">${md(S.homeAnswer)}</div>`;
   h += `<div class="section-h"><h3>Coming up</h3>${calOk ? "" : '<button class="link" id="connectCal">Connect calendar</button>'}</div>`;
@@ -368,11 +398,58 @@ async function connectCalendar() { await grantPerm("calendar"); }
 function renderBadge() {
   const b = document.querySelector(".local-badge");
   if (!b || !S.settings) return;
-  const p = S.settings.provider || (S.providers || []).find((x) => x.available && x.signed_in)?.id;
+  // Only the provider the user chose counts: with none chosen, AI notes don't run at all.
+  const p = S.settings.provider;
   const local = p === "ollama";
   const name = { claude: "Claude", codex: "Codex", ollama: "Ollama" }[p];
-  if (local || !p) { b.textContent = "● On this Mac"; b.title = "Audio, transcripts and notes stay on this Mac"; }
+  if (local || !p) { b.textContent = "● On this Mac"; b.title = p ? "Audio, transcripts and notes stay on this Mac" : "Audio, transcripts and notes stay on this Mac. AI notes are off until you choose who writes them."; }
   else { b.textContent = `● Audio on this Mac · notes via ${name}`; b.title = `Audio and transcripts stay on this Mac. When notes are written, the transcript text is sent to ${name}.`; }
+  renderAutoMarker();
+  // With the auto-record marker beside it, keep the badge short (the full text stays in the tooltip).
+  if (S.settings.calendar_mode === "auto") b.textContent = local || !p ? "● On this Mac" : `● Notes: ${name}`;
+}
+
+// Auto-record must never be forgotten: a persistent marker in the sidebar footer.
+function renderAutoMarker() {
+  const foot = document.querySelector(".sidebar-foot");
+  if (!foot || !S.settings) return;
+  let mk = $("#autoMark");
+  const on = S.settings.calendar_mode === "auto";
+  if (!on) { if (mk) mk.remove(); closeAutoPop(); return; }
+  if (!mk) {
+    mk = document.createElement("button");
+    mk.id = "autoMark";
+    mk.className = "auto-mark";
+    mk.title = "Auto-record is on: Margin starts recording calendar meetings by itself";
+    mk.innerHTML = `<span class="rec-dot"></span>Auto-record`;
+    mk.onclick = toggleAutoPop;
+    foot.insertBefore(mk, foot.querySelector(".local-badge"));
+  }
+}
+function closeAutoPop() { $("#autoPop")?.remove(); document.removeEventListener("mousedown", autoOutside, true); }
+function autoOutside(e) { if (!e.target.closest("#autoPop") && !e.target.closest("#autoMark")) closeAutoPop(); }
+function toggleAutoPop() {
+  if ($("#autoPop")) return closeAutoPop();
+  const pop = document.createElement("div");
+  pop.id = "autoPop";
+  pop.className = "auto-pop";
+  pop.innerHTML = `<b>Auto-record is on</b>
+    <p>Margin starts recording calendar meetings with people in them a minute before they begin, and tells you when it does.</p>
+    <button class="btn small primary" id="autoOff">Turn off auto-record</button>
+    <p class="hint">You'll get a notification instead, and choose each time.</p>`;
+  document.querySelector(".sidebar").appendChild(pop);
+  $("#autoOff").onclick = turnOffAutoRecord;
+  setTimeout(() => document.addEventListener("mousedown", autoOutside, true), 0);
+}
+async function turnOffAutoRecord() {
+  try {
+    S.settings = await invoke("turn_off_auto_record");
+    closeAutoPop();
+    renderBadge();
+    renderBanner(true);
+    if (S.view === "settings") render();
+    toast("Auto-record is off. Margin will notify you instead.");
+  } catch (e) { fail(e); }
 }
 
 // ------------------------------------------------------------------ permissions
@@ -467,7 +544,9 @@ function renderNote(v, soft) {
   const editorFocused = document.activeElement && document.activeElement.id === "notesEditor";
   const askFocused = document.activeElement && document.activeElement.id === "askInput";
   // Soft refreshes while typing only touch the transcript/chat to keep the caret steady.
-  if (soft && (editorFocused || askFocused || document.activeElement?.id === "titleInput")) {
+  // Never throw away an in-progress edit of the AI notes on a background refresh.
+  const aiEditing = S.editingAi === m.id && $("#aiEditor");
+  if (soft && (editorFocused || askFocused || aiEditing || document.activeElement?.id === "titleInput")) {
     const tr = $("#transcriptBox");
     if (tr) tr.innerHTML = transcriptHtml(d);
     const sp = $("#speakersBox");
@@ -498,19 +577,28 @@ function renderNote(v, soft) {
       <button class="icon-btn" id="moreBtn" title="More">${ICON.dots}</button>
     </div>`;
   if (S.tab === "notes") {
-    if (m.enhanced && !S.showMine) {
-      h += `<div class="sheet"><div class="md">${md(m.enhanced)}</div></div>
-        <div style="display:flex;gap:8px;margin-top:22px;flex-wrap:wrap">
-          <button class="btn small" id="toggleMine">Edit my notes</button>
+    if (m.enhanced && !S.showMine && S.editingAi === m.id) {
+      h += provenanceHtml(m) + `<div class="sheet"><textarea id="aiEditor" class="editor md-editor" spellcheck="true">${esc(m.enhanced)}</textarea></div>
+        <div class="note-actions">
+          <button class="btn small primary" id="aiSave">Save changes</button>
+          <button class="btn small" id="aiCancel">Cancel</button>
+          <span class="hint">Markdown: “- [ ]” makes an action item.</span>
+        </div>`;
+    } else if (m.enhanced && !S.showMine) {
+      h += provenanceHtml(m) + `<div class="sheet"><div class="md" id="aiNotes">${md(m.enhanced, { tasks: true })}</div></div>
+        <div class="note-actions" id="aiActions">${S.confirmRegen === m.id ? regenConfirmHtml() : `
+          <button class="btn small" id="aiEdit">Edit</button>
+          <button class="btn small" id="toggleMine">My notes</button>
           <button class="btn small" id="regen">${ICON.spark} Regenerate</button>
-          <button class="btn small" id="copyMd">${ICON.copy} Copy</button>
+          <button class="btn small" id="copyMd">${ICON.copy} Copy</button>`}
         </div>
         ${m.notes.trim() ? `<div class="yours"><b style="color:var(--ink)">Your notes</b>\n${esc(m.notes.trim())}</div>` : ""}`;
     } else {
-      h += `<div class="sheet"><textarea id="notesEditor" class="editor" spellcheck="true" placeholder="${isRec ? "Jot down what matters — Margin listens and fills in the rest…" : "Write notes here. Start recording and Margin will turn them into full notes."}">${esc(m.notes)}</textarea></div>
-        <div style="display:flex;gap:8px;margin-top:18px;flex-wrap:wrap">
-          ${m.enhanced ? `<button class="btn small" id="toggleMine">Show enhanced notes</button>` : ""}
-          ${!isRec && (d.segments.length || m.notes.trim()) ? `<button class="btn small primary" id="regen">${ICON.spark} ${m.enhanced ? "Regenerate" : "Enhance notes"}</button>` : ""}
+      const noProvider = !S.settings?.provider && !m.enhanced && !isRec && d.segments.length > 0;
+      h += (noProvider ? choosePromptHtml() : "") + `<div class="sheet"><textarea id="notesEditor" class="editor" spellcheck="true" placeholder="${isRec ? "Jot down what matters — Margin listens and fills in the rest…" : "Write notes here. Start recording and Margin will turn them into full notes."}">${esc(m.notes)}</textarea></div>
+        <div class="note-actions">
+          ${m.enhanced ? `<button class="btn small" id="toggleMine">Show AI notes</button>` : ""}
+          ${!isRec && (d.segments.length || m.notes.trim()) ? `<button class="btn small ${m.enhanced ? "" : "primary"}" id="regen">${ICON.spark} ${m.enhanced ? "Regenerate" : "Write AI notes"}</button>` : ""}
         </div>`;
     }
   } else if (S.tab === "transcript") {
@@ -529,15 +617,60 @@ function renderNote(v, soft) {
   if (S.tab === "transcript" && isRec) v.scrollTop = v.scrollHeight;
 }
 
+// Who wrote what: the AI notes carry their provenance at the top.
+function provenanceHtml(m) {
+  const tpl = (S.templates.find((t) => t.id === m.template) || {}).name || (m.template === "auto" ? "Auto" : m.template);
+  const by = m.enhanced_by ? `<b>${esc(m.enhanced_by)}</b>` : "an AI model";
+  const stt = m.stt_model ? ` Transcribed on this Mac by ${m.stt_model}.` : "";
+  return `<div class="src-strip" title="AI notes can contain mistakes. Check them against the transcript.${esc(stt)}">${ICON.spark}
+    <span>Written by ${by} from your notes and the transcript · ${esc(tpl)}${m.enhanced_edited ? ` · <span class="edited">edited by you</span>` : ""}</span></div>`;
+}
+
+function regenConfirmHtml() {
+  return `<div class="inline-confirm"><span>Regenerating replaces your edits to the AI notes.</span>
+    <button class="btn small ember" id="regenYes">Replace my edits</button>
+    <button class="btn small" id="regenNo">Keep them</button></div>`;
+}
+
+function choosePromptHtml() {
+  return `<div class="callout choose">${ICON.spark}<div style="flex:1"><b>Choose who writes your notes</b>
+    <span>Margin hasn't written AI notes for this meeting because you haven't picked an AI yet. Nothing has left this Mac.</span></div>
+    <button class="btn small ember" id="chooseProv">Choose</button></div>`;
+}
+
+// A small sheet for picking the AI provider, used wherever AI notes are needed but none is chosen.
+async function openProviderChooser(after) {
+  if (!S.providers) await loadProviders(false).catch(() => {});
+  const avail = (S.providers || []).filter((p) => p.available && p.signed_in);
+  const dlg = dialog(`<form><h4>Who writes your notes?</h4>
+    <p class="hint" style="margin:0 0 10px">Margin sends the transcript text, never audio, to the AI you pick. Ollama keeps it all on this Mac. Margin remembers your choice.</p>
+    <div class="prov-pick">${avail.length ? avail.map((p) => `<button type="button" class="provider" data-pick="${p.id}"><span class="status ok"></span><div class="pi"><b>${esc(p.name)}</b><span>${esc(p.id === "ollama" ? "On this Mac. Nothing leaves it." : p.detail)}</span></div></button>`).join("")
+      : `<p class="hint">No AI found. Sign in to Claude Code (<code>claude</code>) or Codex (<code>codex login</code>), or run Ollama, then open Settings → AI notes.</p>`}</div>
+    <div class="actions"><button type="button" class="btn" data-cancel>Not now</button></div></form>`, () => {});
+  dlg.style.width = "460px";
+  dlg.querySelectorAll("[data-pick]").forEach((b) => (b.onclick = async () => {
+    await saveSettings({ provider: b.dataset.pick });
+    dlg.close(); dlg.remove();
+    toast(`Notes will be written by ${S.providers.find((p) => p.id === b.dataset.pick)?.name}`);
+    if (after) after();
+  }));
+}
+
 function busyHtml(d) {
   return d.busy ? `<span class="busy"><span class="spinner"></span>${esc(d.busy)}…</span>` : "";
 }
+
+const GUESS_TIP = "Guessed from the conversation — click to confirm or rename";
+const isGuessed = (key, m) => !!m?.speakers?.[key] && (m.speakers_guessed || []).includes(key);
 
 function speakersHtml(d) {
   const keys = speakersInMeeting(d);
   if (!keys.length) return "";
   const hasUnknown = keys.some((k) => k.startsWith("s") && !d.meeting.speakers[k]);
-  return keys.map((k) => `<button class="chip" data-speaker="${esc(k)}" title="Rename"><i class="av" style="background:${speakerColor(k)};width:9px;height:9px"></i>${esc(speakerName(k, d.meeting))}</button>`).join("")
+  return keys.map((k) => {
+    const g = isGuessed(k, d.meeting);
+    return `<button class="chip ${g ? "guessed" : ""}" data-speaker="${esc(k)}" title="${g ? GUESS_TIP : "Rename"}"><i class="av" style="background:${speakerColor(k)};width:9px;height:9px"></i><span class="nm">${esc(speakerName(k, d.meeting))}</span>${g ? '<span class="q" aria-label="guessed">?</span>' : ""}</button>`;
+  }).join("")
     + (hasUnknown ? `<button class="link" id="idSpeakers" style="margin-left:6px">${ICON.people} Identify speakers</button>` : "");
 }
 
@@ -590,7 +723,7 @@ function transcriptHtml(d) {
   for (const s of d.segments) {
     const same = prev && prev.speaker === s.speaker && s.start_ms - prev.end_ms < 4000;
     h += `<div class="line ${s.speaker === "me" ? "me" : ""}"><div class="ts">${same ? "" : playable ? `<button class="ts-play" data-play="${s.start_ms}" title="Play from here">${fmtTs(s.start_ms)}</button>` : fmtTs(s.start_ms)}</div><div>
-      ${same ? "" : `<button class="who" data-speaker="${esc(s.speaker)}"><i style="background:${speakerColor(s.speaker)}"></i>${esc(speakerName(s.speaker, d.meeting))}</button>`}
+      ${same ? "" : `<button class="who ${isGuessed(s.speaker, d.meeting) ? "guessed" : ""}" data-speaker="${esc(s.speaker)}" ${isGuessed(s.speaker, d.meeting) ? `title="${GUESS_TIP}"` : ""}><i style="background:${speakerColor(s.speaker)}"></i><span class="nm">${esc(speakerName(s.speaker, d.meeting))}</span>${isGuessed(s.speaker, d.meeting) ? '<span class="q">?</span>' : ""}</button>`}
       <div class="tx" data-seg="${s.id}">${esc(s.text)}</div></div></div>`;
     prev = s;
   }
@@ -627,7 +760,46 @@ function bindNote(v) {
   const tm = $("#toggleMine");
   if (tm) tm.onclick = () => { S.showMine = !S.showMine; render(); };
   const rg = $("#regen");
-  if (rg) rg.onclick = enhanceNow;
+  if (rg) rg.onclick = () => {
+    if (!S.settings?.provider) return openProviderChooser(enhanceNow);
+    // Regenerating over the user's own edits needs an in-page yes (window.confirm is unreliable here).
+    if (m.enhanced && m.enhanced_edited && !S.showMine) { S.confirmRegen = m.id; render(); return; }
+    enhanceNow();
+  };
+  const ry = $("#regenYes");
+  if (ry) ry.onclick = () => { S.confirmRegen = null; enhanceNow(); };
+  const rn = $("#regenNo");
+  if (rn) rn.onclick = () => { S.confirmRegen = null; render(); };
+  const cp2 = $("#chooseProv");
+  if (cp2) cp2.onclick = () => openProviderChooser(() => render());
+  // Editing the AI notes: a plain Markdown editor, saved as the user's version.
+  const ae = $("#aiEdit");
+  if (ae) ae.onclick = () => { S.editingAi = m.id; S.confirmRegen = null; render(); const t = $("#aiEditor"); if (t) { autoGrow(t); t.focus(); } };
+  const aed = $("#aiEditor");
+  if (aed) { autoGrow(aed); aed.oninput = () => autoGrow(aed); aed.onkeydown = (e) => { if (e.metaKey && e.key === "s") { e.preventDefault(); $("#aiSave").click(); } if (e.key === "Escape") $("#aiCancel").click(); }; }
+  const as = $("#aiSave");
+  if (as) as.onclick = async () => {
+    const val = $("#aiEditor").value;
+    try {
+      await invoke("update_meeting", { id: m.id, field: "enhanced", value: val });
+      m.enhanced = val; m.enhanced_edited = true; S.editingAi = null;
+      render(); toast("AI notes saved as your edit");
+    } catch (e) { fail(e); }
+  };
+  const ac = $("#aiCancel");
+  if (ac) ac.onclick = () => { S.editingAi = null; render(); };
+  // Live action items: tick the box, flip "- [ ]" ↔ "- [x]" in the Markdown and save.
+  v.querySelectorAll("#aiNotes input[data-line]").forEach((cb) => (cb.onchange = async () => {
+    const lines = m.enhanced.split("\n");
+    const i = Number(cb.dataset.line);
+    lines[i] = lines[i].replace(TASK_RE, (_, a, _x, b, rest) => `${a}${cb.checked ? "x" : " "}${b}${rest}`);
+    m.enhanced = lines.join("\n");
+    m.enhanced_edited = true;
+    cb.closest("li").classList.toggle("done", cb.checked);
+    try { await invoke("update_meeting", { id: m.id, field: "enhanced", value: m.enhanced }); } catch (e) { fail(e); }
+    const strip = $(".src-strip span");
+    if (strip && !strip.querySelector(".edited")) strip.insertAdjacentHTML("beforeend", ` · <span class="edited">edited by you</span>`);
+  }));
   const cp = $("#copyMd");
   if (cp) cp.onclick = async () => { await navigator.clipboard.writeText(`# ${m.title || "Meeting notes"}\n\n${m.enhanced.trim()}\n`); toast("Notes copied (transcript not included)"); };
   const jl = $("#joinLink");
@@ -686,11 +858,13 @@ function dialog(html, onOk) {
 function renameSpeaker(key) {
   const m = S.detail.meeting;
   const names = [...new Set([...m.attendees.map((a) => a.name), ...Object.values(m.speakers)])].filter(Boolean);
-  const dlg = dialog(`<form><h4>Who is this?</h4>
+  const guessed = isGuessed(key, m);
+  const dlg = dialog(`<form><h4>${guessed ? `Is this ${esc(m.speakers[key])}?` : "Who is this?"}</h4>
+    ${guessed ? `<p class="hint" style="margin:0 0 10px">Margin guessed this name from the conversation. Confirm it, or type the right name.</p>` : ""}
     <input class="field" name="n" value="${esc(m.speakers[key] || (key === "me" ? S.settings?.user_name || "" : ""))}" placeholder="Name" autofocus />
     ${names.length ? `<div class="sugs">${names.map((n) => `<button type="button" class="btn small" data-n="${esc(n)}">${esc(n)}</button>`).join("")}</div>` : ""}
     <p class="hint">Giving two speakers the same name merges them.</p>
-    <div class="actions"><button type="button" class="btn" data-cancel>Cancel</button><button class="btn primary">Save</button></div></form>`,
+    <div class="actions"><button type="button" class="btn" data-cancel>Cancel</button><button class="btn primary">${guessed ? "Confirm" : "Save"}</button></div></form>`,
     async (dl) => {
       await invoke("rename_speaker", { id: m.id, key, name: dl.querySelector("[name=n]").value }).catch(fail);
       await refreshDetail();
@@ -732,10 +906,10 @@ function dockHtml() {
   const recHere = r.recording && (!here || r.meeting_id === S.meetingId);
   const bars = (n) => Array.from({ length: n }, () => "<b></b>").join("");
   if (r.recording) {
-    return `<div class="dock">
-      <button class="rec" id="dockStop" title="Stop recording">${ICON.stop}<span>Stop</span></button>
-      <button class="icon-btn" id="dockPause" title="${r.paused ? "Resume" : "Pause"}">${r.paused ? ICON.play : ICON.pause}</button>
+    return `<div class="dock recording">
+      <span class="rec-live" title="${r.auto ? "Recording automatically (auto-record)" : "Recording"}"><span class="rec-dot"></span>REC${r.auto ? `<small>auto</small>` : ""}</span>
       <span class="timer" id="dockTimer">${fmtDur(r.elapsed_ms || 0)}</span>
+      <button class="rec" id="dockStop" title="Stop recording">${ICON.stop}<span>Stop</span></button>
       ${deviceChipHtml(true)}
       ${recHere && here ? `<label class="ask">${ICON.spark}<input id="askInput" placeholder="Ask about this meeting…" /></label>
       <button class="icon-btn ${S.tab === "transcript" ? "on" : ""}" id="dockTranscript" title="Transcript">${ICON.transcript}</button>`
@@ -859,8 +1033,6 @@ function bindDock() {
   };
   const sp = $("#dockStop");
   if (sp) sp.onclick = () => invoke("stop_recording").catch(fail);
-  const pa = $("#dockPause");
-  if (pa) pa.onclick = () => invoke("pause_recording", { paused: !S.rec.paused });
   const tr = $("#dockTranscript");
   if (tr) tr.onclick = () => { S.tab = S.tab === "transcript" ? "notes" : "transcript"; render(); };
   const go = $("#dockGoto");
@@ -883,6 +1055,7 @@ function paintLevels() {
   paint($("#mMic"), live ? S.levels.mic : $("#devPop") ? S.testLevel : 0);
   paint($("#mSys"), live ? S.levels.system : 0);
   paint($("#testBars"), live ? S.levels.mic : S.testLevel);
+  paint($("#obtBars"), live ? S.levels.mic : 0);
   const hint = $("#devHint");
   if (hint && !live && S.testSilent) hint.innerHTML = `macOS is giving Margin silence from this mic. <button class="link" id="devMicFix">Fix</button>`, ($("#devMicFix").onclick = () => { closeDevicePicker(); openPermsSheet("Margin needs your microphone"); });
 }
@@ -919,11 +1092,14 @@ function modelsHtml() {
   const f = S.langFilter;
   const list = S.models.models.filter((m) => f === "all" || m.languages.includes(f));
   const mine = list.filter((m) => m.downloaded), rest = list.filter((m) => !m.downloaded);
+  const rec = rest.filter((m) => m.recommended), more = rest.filter((m) => !m.recommended);
+  // A filtered search for a language only the extra models cover opens the disclosure.
+  const openMore = S.moreModels || (f !== "all" && !rec.length && more.length);
   return `<div class="models-toolbar"><h3>Downloaded models</h3>
       <select class="field" id="langFilter">${LANGS.map(([k, n]) => `<option value="${k}" ${k === f ? "selected" : ""}>${n}</option>`).join("")}</select></div>
-    ${mine.length ? mine.map(modelCard).join("") : `<p class="hint">None yet. Parakeet v2 is a great start for English; Parakeet v3 or Whisper for other languages.</p>`}
-    <div class="models-toolbar"><h3>Available to download</h3></div>
-    ${rest.map(modelCard).join("")}
+    ${mine.length ? mine.map(modelCard).join("") : `<p class="hint">None yet. Parakeet v2 is the best start for English; Parakeet v3 covers 25 European languages.</p>`}
+    ${rec.length ? `<div class="models-toolbar"><h3>Recommended</h3></div>${rec.map(modelCard).join("")}` : ""}
+    ${more.length ? `<details class="more-models" id="moreModels" ${openMore ? "open" : ""}><summary>More models <span class="hint">${more.length} for other languages, translation or older Macs</span></summary>${more.map(modelCard).join("")}</details>` : ""}
     <p class="hint">Models are open weights and run entirely on this Mac. Speaker recognition uses a small extra model (${S.models.speaker_model ? "installed" : "downloads with your first model"}).</p>`;
 }
 
@@ -953,7 +1129,9 @@ function renderSettings(v) {
   <h2>Calendar &amp; meetings</h2><p class="desc">Margin only ever <b>reads</b> calendars. Pick the least access that works for you.</p>
   <div id="calSources"><p class="hint">Checking calendars…</p></div>
   <div class="row"><div class="rl"><b>When a meeting starts</b><span>Notify you, start recording on its own, or stay quiet.</span></div>${seg("calendar_mode", s.calendar_mode, [["notify", "Notify me"], ["auto", "Record automatically"], ["off", "Off"]])}</div>
+  ${s.calendar_mode === "auto" ? `<p class="auto-ack"><span class="rec-dot"></span><span>Auto-record is on. Margin records meetings with people in them by itself, shows <b>Auto-record</b> in the sidebar and menu bar while it's on, and tells you each time it starts. Let the people you meet know they're being transcribed.</span></p>` : ""}
   <div class="row"><div class="rl"><b>Stop when the meeting ends</b><span>After the event's end time once the room goes quiet.</span></div>${sw("auto_stop", s.auto_stop)}</div>
+  <div class="row"><div class="rl"><b>Open at login</b><span>Margin waits in the menu bar so it can catch your first meeting of the day.</span></div><button class="switch" id="autostartSw" role="switch" aria-checked="false"></button></div>
   <div class="row"><div class="rl"><b>Notice unscheduled calls</b><span>Zoom, Teams, Webex, Slack, FaceTime… using your mic.</span></div>${sw("detect_calls", s.detect_calls)}</div>
   <div class="row"><div class="rl"><b>Only meetings with people</b><span>Skip focus blocks and reminders without guests or a call link.</span></div>${sw("only_real_meetings", s.only_real_meetings)}</div>
 
@@ -1087,13 +1265,13 @@ async function loadAgents() {
 function providersHtml() {
   if (!S.providers) return `<p class="hint"><span class="spinner" style="display:inline-block;vertical-align:-2px"></span> Looking for Claude Code, Codex and Ollama…</p>`;
   const sel = S.settings.provider;
-  const autoPick = S.providers.find((p) => p.available && p.signed_in)?.id;
-  return S.providers.map((p) => {
-    const on = (sel || autoPick) === p.id;
+  const head = sel ? "" : `<div class="callout choose" style="margin-bottom:8px">${ICON.spark}<div><b>No AI chosen. AI notes are off.</b><span>Pick one below and Margin will remember it. Until then nothing is sent anywhere.</span></div></div>`;
+  return head + S.providers.map((p) => {
+    const on = sel === p.id;
     return `<div class="provider ${on ? "on" : ""}"><span class="status ${p.available && p.signed_in ? "ok" : ""}"></span>
       <div class="pi"><b>${esc(p.name)}${p.model ? ` <span class="hint">· ${esc(p.model)}</span>` : ""}</b><span>${esc(p.detail)}</span></div>
-      ${p.available && p.signed_in ? (on ? `<span class="badge">${sel ? "Selected" : "In use"}</span>` : `<button class="btn small" data-prov="${p.id}">Use</button>`) : ""}</div>`;
-  }).join("") + `<button class="link" id="provRefresh">Check again</button>`;
+      ${p.available && p.signed_in ? (on ? `<span class="badge">Selected</span>` : `<button class="btn small" data-prov="${p.id}">Use</button>`) : ""}</div>`;
+  }).join("") + `<div style="display:flex;gap:16px"><button class="link" id="provRefresh">Check again</button>${sel ? `<button class="link" id="provNone" style="color:var(--ink-2)">Don't use AI notes</button>` : ""}</div>`;
 }
 
 async function saveSettings(patch) {
@@ -1119,6 +1297,12 @@ function bindSettings(v) {
   const cc = $("#calConnect");
   if (cc) cc.onclick = connectCalendar;
   bindPerms(v);
+  const as = $("#autostartSw");
+  const paintAs = (on) => { as.classList.toggle("on", on); as.setAttribute("aria-checked", String(on)); };
+  invoke("autostart_get").then((on) => paintAs(!!on)).catch(() => {});
+  as.onclick = async () => {
+    try { paintAs(!!(await invoke("autostart_set", { on: !as.classList.contains("on") }))); } catch (e) { fail(e); }
+  };
   loadAgents();
   loadCalendarSources();
   if (S.settings.keep_audio) invoke("audio_storage").then((u) => { const el = $("#audioUsage"); if (el) el.textContent = `Using ${(u.bytes / 1048576).toFixed(u.bytes > 1e8 ? 0 : 1)} MB. Transcripts and notes are always kept.`; }).catch(() => {});
@@ -1130,6 +1314,8 @@ function bindModels(v) {
   const box = $("#modelsBox", v) || v;
   const lf = $("#langFilter", box);
   if (lf) lf.onchange = (e) => { S.langFilter = e.target.value; rerenderModels(); };
+  const mm = $("#moreModels", box);
+  if (mm) mm.ontoggle = () => { S.moreModels = mm.open; };
   box.querySelectorAll("[data-dl]").forEach((b) => (b.onclick = async () => {
     S.progress[b.dataset.dl] = { done: 0, total: 0 };
     await invoke("download_model", { id: b.dataset.dl }).catch(fail);
@@ -1156,18 +1342,22 @@ function rerenderModels() {
 
 function bindProviders(v) {
   v.querySelectorAll("[data-prov]").forEach((b) => (b.onclick = async () => { await saveSettings({ provider: b.dataset.prov }); $("#provBox").innerHTML = providersHtml(); bindProviders(v); }));
+  const pn = $("#provNone", v);
+  if (pn) pn.onclick = async () => { await saveSettings({ provider: null }); $("#provBox").innerHTML = providersHtml(); bindProviders(v); toast("AI notes are off"); };
   const r = $("#provRefresh", v);
   if (r) r.onclick = async () => { S.providers = null; $("#provBox").innerHTML = providersHtml(); await loadProviders(true); $("#provBox").innerHTML = providersHtml(); bindProviders(v); };
 }
 
 // ------------------------------------------------------------------ onboarding
 function renderOnboarding(v) {
+  if (S.obTest) return renderObTest(v);
   const hasModel = S.models?.models.some((m) => m.downloaded);
   const dling = S.models?.models.find((m) => S.progress[m.id] && !S.progress[m.id].finished);
   const permsOk = ["microphone", "system_audio", "calendar"].every((k) => S.perms?.[k] === "granted");
   const avail = (S.providers || []).filter((p) => p.available && p.signed_in);
   const chosen = S.settings.provider ? avail.find((p) => p.id === S.settings.provider) : null;
-  const ai = chosen;
+  const skipped = !chosen && S.obNoAi;
+  const ai = chosen || skipped;
   const pct = dling && S.progress[dling.id].total ? Math.round((S.progress[dling.id].done / S.progress[dling.id].total) * 100) : 0;
   v.innerHTML = `<div class="onboard"><img class="illus" src="img/onboarding.jpg" alt="">
     <h1>Notes that write themselves.<br>Audio never leaves your Mac.</h1>
@@ -1179,12 +1369,12 @@ function renderOnboarding(v) {
         <div class="perms-slot" style="margin-top:10px">${permsHtml()}</div></div></div>
       ${S.vaults?.length ? `<div class="step ${S.settings.obsidian ? "done" : ""}"><span class="n">${S.settings.obsidian ? "✓" : "★"}</span><div><b>Keep notes in Obsidian <span class="hint">(optional)</span></b><span>${S.settings.obsidian ? `Every meeting is mirrored into ${esc(S.settings.obsidian.root.split("/").pop())}/${esc(S.settings.obsidian.folder)}.` : `Found your vault “${esc(S.vaults[0].name)}”. Mirror every meeting there as Markdown.`}</span></div>
         ${S.settings.obsidian ? "" : `<button class="btn small" id="obVault">Use it</button>`}</div>` : ""}
-      <div class="step ${ai ? "done" : ""}"><span class="n">${ai ? "✓" : 3}</span><div><b>Who writes your notes?</b><span>${chosen ? `${esc(chosen.name)} — ${chosen.id === "ollama" ? "on this Mac, nothing leaves it." : "the transcript text is sent to it when notes are written. Audio never is."}` : S.providers ? (avail.length ? "Pick one. Claude/Codex use your existing subscription; Ollama keeps everything on this Mac." : "Sign in to Claude Code (claude) or Codex (codex login), or run Ollama.") : "Checking…"}</span>
-          ${!chosen && avail.length ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">${avail.map((p) => `<button class="btn small" data-ob-prov="${p.id}">${esc(p.name)}</button>`).join("")}</div>` : ""}</div>
-        ${chosen || !S.providers || avail.length ? "" : `<button class="btn small" id="obAi">Check again</button>`}</div>
+      <div class="step ${ai ? "done" : ""}"><span class="n">${ai ? "✓" : 3}</span><div><b>Who writes your notes?</b><span>${chosen ? `${esc(chosen.name)}: ${chosen.id === "ollama" ? "on this Mac, nothing leaves it." : "the transcript text is sent to it when notes are written. Audio never is."} <button class="link" id="obChange">Change</button>` : skipped ? `No AI for now. Margin only transcribes, and nothing leaves this Mac. Pick one later in Settings → AI notes. <button class="link" id="obChange">Choose now</button>` : S.providers ? (avail.length ? "Pick one and Margin remembers it. Claude and Codex use your existing subscription; Ollama keeps everything on this Mac." : "Sign in to Claude Code (claude) or Codex (codex login), or run Ollama.") : "Checking…"}</span>
+          ${!ai && S.providers ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">${avail.map((p) => `<button class="btn small" data-ob-prov="${p.id}">${esc(p.name)}</button>`).join("")}<button class="btn small quiet" id="obNoAi">Not now</button></div>` : ""}</div>
+        ${ai || !S.providers || avail.length ? "" : `<button class="btn small" id="obAi">Check again</button>`}</div>
     </div>
-    <div style="display:flex;gap:10px;align-items:center"><button class="btn primary" id="obDone" ${hasModel ? "" : "disabled"}>Start using Margin</button>
-      ${hasModel ? "" : `<span class="hint">A speech model is required.</span>`}</div></div>`;
+    <div style="display:flex;gap:10px;align-items:center"><button class="btn primary" id="obDone" ${hasModel && ai ? "" : "disabled"}>Next: test your mic</button>
+      <span class="hint">${!hasModel ? "A speech model is required." : !ai ? "Choose who writes your notes, or pick “Not now”." : "A 20-second test, then you're done."}</span></div></div>`;
   const dl = $("#obDl");
   if (dl) dl.onclick = async () => { S.progress["parakeet-v2"] = { done: 0, total: 0 }; await invoke("download_model", { id: "parakeet-v2" }).catch(fail); renderOnboarding(v); };
   const more = $("#obMore");
@@ -1192,10 +1382,102 @@ function renderOnboarding(v) {
   bindPerms(v);
   const aib = $("#obAi");
   if (aib) aib.onclick = async () => { S.providers = null; renderOnboarding(v); await loadProviders(true); renderOnboarding(v); };
-  v.querySelectorAll("[data-ob-prov]").forEach((b) => (b.onclick = async () => { await saveSettings({ provider: b.dataset.obProv }); renderOnboarding(v); renderBadge(); }));
+  v.querySelectorAll("[data-ob-prov]").forEach((b) => (b.onclick = async () => { S.obNoAi = false; await saveSettings({ provider: b.dataset.obProv }); renderOnboarding(v); renderBadge(); }));
+  const na = $("#obNoAi");
+  if (na) na.onclick = () => { S.obNoAi = true; renderOnboarding(v); };
+  const ch = $("#obChange");
+  if (ch) ch.onclick = async () => { S.obNoAi = false; await saveSettings({ provider: null }); renderOnboarding(v); };
   const ov = $("#obVault");
   if (ov) ov.onclick = async () => { await saveSettings({ obsidian: { root: S.vaults[0].path, folder: "Meetings", link_people: true, link_daily_note: true, include_transcript: true } }); renderOnboarding(v); };
-  $("#obDone").onclick = async () => { await saveSettings({ onboarded: true }); S.view = "home"; render(); };
+  $("#obDone").onclick = () => { S.obTest = { phase: "ready", lines: [] }; renderOnboarding(v); };
+}
+
+// ------------------------------------------------------------------ onboarding: 20-second mic test
+const OB_TEST_SECS = 20;
+function renderObTest(v) {
+  const t = S.obTest;
+  const lines = t.lines.map((s) => `<div class="ob-line ${s.speaker === "me" ? "me" : ""}"><span class="ts">${fmtTs(s.start_ms)}</span><span>${esc(s.text)}</span></div>`).join("");
+  let body, actions;
+  if (t.phase === "ready") {
+    body = `<p>Margin will record into a scratch note for ${OB_TEST_SECS} seconds. Say something out loud, like what you're working on today, and watch the words appear. Everything stays on this Mac.</p>`;
+    actions = `<button class="btn ember" id="obtStart"><span class="dot-w"></span>Start the test</button><button class="btn" id="obtSkip">Skip</button>`;
+  } else if (t.phase === "recording") {
+    body = `<div class="ob-live"><span class="rec-badge"><span class="rec-dot"></span>REC</span><span class="ob-count" id="obtCount">${t.left}s</span>
+        <span class="meter me" id="obtBars">${Array.from({ length: 9 }, () => "<b></b>").join("")}</span></div>
+      <div class="ob-lines" id="obtLines">${lines || `<p class="hint">Listening… say something.</p>`}</div>`;
+    actions = `<button class="btn" id="obtStop">${ICON.stop} Stop early</button>`;
+  } else {
+    const heard = t.lines.length > 0;
+    body = `<div class="ob-lines">${lines || ""}</div>
+      ${heard ? `<p>That's Margin hearing you, transcribed on this Mac. You're ready for your next meeting.</p>`
+        : `<p>Margin didn't hear anything. Check the mic is the right one and isn't muted, then try again.</p>`}`;
+    actions = heard
+      ? `<button class="btn primary" id="obtDone">Looks good</button><button class="link" id="obtKeep">Keep this test note</button>`
+      : `<button class="btn primary" id="obtRetry">Try again</button><button class="btn" id="obtMic">Choose mic</button><button class="link" id="obtDoneAnyway">Finish anyway</button>`;
+  }
+  v.innerHTML = `<div class="onboard ob-test"><h1>${t.phase === "done" ? (t.lines.length ? "Margin can hear you." : "Nothing heard yet.") : "Say something."}</h1>
+    ${body}<div class="ob-actions">${actions}</div></div>`;
+  const on = (id, fn) => { const el = $("#" + id); if (el) el.onclick = fn; };
+  on("obtStart", startObTest);
+  on("obtSkip", () => finishOnboarding(false));
+  on("obtStop", () => stopObTest());
+  on("obtDone", () => finishOnboarding(false));
+  on("obtDoneAnyway", () => finishOnboarding(false));
+  on("obtKeep", () => finishOnboarding(true));
+  on("obtRetry", async () => { await discardObTestNote(); S.obTest = { phase: "ready", lines: [] }; startObTest(); });
+  on("obtMic", () => openDevicePicker());
+  const box = $("#obtLines");
+  if (box) box.scrollTop = box.scrollHeight;
+}
+
+async function startObTest() {
+  const v = $("#view");
+  if (S.perms && S.perms.microphone !== "granted") {
+    await grantPerm("microphone");
+    if (S.perms.microphone !== "granted") { openPermsSheet("Margin needs your microphone"); return; }
+  }
+  try {
+    const m = await invoke("create_meeting", { title: "Margin mic test" });
+    S.obTest = { phase: "recording", lines: [], id: m.id, left: OB_TEST_SECS };
+    renderObTest(v);
+    await invoke("start_recording", { id: m.id });
+    S.obTest.timer = setInterval(() => {
+      if (!S.obTest || S.obTest.phase !== "recording") return;
+      S.obTest.left -= 1;
+      const c = $("#obtCount");
+      if (c) c.textContent = `${Math.max(0, S.obTest.left)}s`;
+      if (S.obTest.left <= 0) stopObTest();
+    }, 1000);
+  } catch (e) { fail(e); S.obTest = { phase: "ready", lines: [] }; renderObTest(v); }
+}
+
+async function stopObTest() {
+  const t = S.obTest;
+  if (!t || t.phase !== "recording") return;
+  clearInterval(t.timer);
+  t.phase = "done";
+  // No AI pass for the test: nothing from it goes anywhere.
+  await invoke("stop_recording", { ai: false }).catch(fail);
+  renderObTest($("#view"));
+}
+
+async function discardObTestNote() {
+  const id = S.obTest?.id;
+  if (id) await invoke("delete_meeting", { id }).catch(() => {});
+}
+
+async function finishOnboarding(keepTest) {
+  if (S.obTest?.phase === "recording") await stopObTest();
+  if (!keepTest) await discardObTestNote();
+  const keptId = keepTest ? S.obTest?.id : null;
+  S.obTest = null;
+  await saveSettings({ onboarded: true });
+  // Launch at login is on by default so Margin is there for the first meeting of the day.
+  invoke("autostart_set", { on: true }).catch(() => {});
+  await loadMeetings();
+  if (keptId) { await openMeeting(keptId, "transcript"); return; }
+  S.view = "home";
+  render();
 }
 
 // ------------------------------------------------------------------ chrome
@@ -1226,6 +1508,13 @@ function wireEvents() {
   listen("segment", (p) => {
     // A transcribed line from the mic proves it isn't blocked.
     if ((S.sysWarn === "mic" || S.sysWarn === "mic-perm") && p.segment.source === "mic") { S.sysWarn = false; renderSysWarn(); }
+    if (S.obTest && p.meeting_id === S.obTest.id) {
+      S.obTest.lines.push(p.segment);
+      S.obTest.lines.sort((a, b) => a.start_ms - b.start_ms);
+      const box = $("#obtLines");
+      if (box) { box.innerHTML = S.obTest.lines.map((s) => `<div class="ob-line ${s.speaker === "me" ? "me" : ""}"><span class="ts">${fmtTs(s.start_ms)}</span><span>${esc(s.text)}</span></div>`).join(""); box.scrollTop = box.scrollHeight; }
+      return;
+    }
     if (S.view === "note" && S.detail && p.meeting_id === S.meetingId) {
       // Mic lines are held briefly for echo checks, so arrivals can be out of order.
       const segs = S.detail.segments;
@@ -1249,7 +1538,8 @@ function wireEvents() {
   listen("levels", (l) => { S.levels = l; });
   listen("mic-test", (t) => { S.testLevel = t.level; S.testSilent = !!t.digital_silence && (S.testSilent || t.level === 0); });
   listen("rec-state", (r) => {
-    const changed = r.recording !== S.rec.recording || r.paused !== S.rec.paused || r.meeting_id !== S.rec.meeting_id || r.system_audio !== S.rec.system_audio;
+    const changed = r.recording !== S.rec.recording || r.paused !== S.rec.paused || r.meeting_id !== S.rec.meeting_id || r.system_audio !== S.rec.system_audio || !!r.auto !== !!S.rec.auto;
+    if (!r.recording) S.autoTitle = null;
     const finishing = r.finishing;
     S.rec = r;
     if (finishing) toast("Recording stopped");
@@ -1257,6 +1547,9 @@ function wireEvents() {
     else { const t = $("#dockTimer"); if (t) t.textContent = fmtDur(r.elapsed_ms || 0); }
   });
   listen("prompt", (p) => { S.prompt = p; renderBanner(); });
+  listen("auto-recording", (p) => { S.autoTitle = p.title; S.autoHidden = null; renderBanner(); });
+  // Changed outside the window (e.g. "Turn off auto-record" in the menu bar).
+  listen("settings-changed", async () => { S.settings = await invoke("get_settings"); renderBadge(); renderBanner(true); if (S.view === "settings") render(); });
   listen("open-meeting", (p) => { loadMeetings(); openMeeting(p.id, "notes").catch(fail); });
   listen("meeting-updated", (p) => { loadMeetings(); if (p.id === S.meetingId) refreshDetail(); });
   listen("busy", (p) => { if (S.detail && p.id === S.meetingId) { S.detail.busy = p.what; const bz = $("#busyBox"); if (bz) bz.innerHTML = busyHtml(S.detail); } });
@@ -1292,6 +1585,7 @@ function wireEvents() {
     await Promise.all([loadMeetings(), loadModels(), loadEvents()]);
     if (!S.settings.onboarded) { S.view = "onboarding"; S.vaults = await invoke("obsidian_vaults").catch(() => []); }
     render();
+    renderBadge();
     if (S.settings.onboarded && ["microphone", "system_audio", "calendar"].some((k) => S.perms[k] !== "granted")) openPermsSheet();
     invoke("rec_state");
     loadDevices();

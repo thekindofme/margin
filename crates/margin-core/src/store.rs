@@ -39,6 +39,12 @@ pub struct Meeting {
     /// Last file written by the Obsidian/folder export (to follow renames).
     #[serde(default)]
     pub export_path: String,
+    /// The user edited the AI notes after they were written (cleared when regenerated).
+    #[serde(default)]
+    pub enhanced_edited: bool,
+    /// Speaker keys whose names were guessed by the AI and not yet confirmed by the user.
+    #[serde(default)]
+    pub speakers_guessed: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,8 +68,11 @@ pub struct ChatMessage {
 pub struct Store {
     conn: Mutex<Connection>,
     /// Optional columns present in this database (a read-only handle can't migrate an older one).
-    cols: (bool, bool, bool),
+    cols: [bool; 5],
 }
+
+/// Optional columns added after the first release, in `cols` order.
+const OPT_COLS: [&str; 5] = ["enhanced_by", "stt_model", "export_path", "enhanced_edited", "speakers_guessed"];
 
 const SCHEMA: &str = r#"
 PRAGMA journal_mode = WAL;
@@ -130,6 +139,8 @@ impl Store {
             ("enhanced_by", "ALTER TABLE meetings ADD COLUMN enhanced_by TEXT NOT NULL DEFAULT ''"),
             ("stt_model", "ALTER TABLE meetings ADD COLUMN stt_model TEXT NOT NULL DEFAULT ''"),
             ("export_path", "ALTER TABLE meetings ADD COLUMN export_path TEXT NOT NULL DEFAULT ''"),
+            ("enhanced_edited", "ALTER TABLE meetings ADD COLUMN enhanced_edited INTEGER NOT NULL DEFAULT 0"),
+            ("speakers_guessed", "ALTER TABLE meetings ADD COLUMN speakers_guessed TEXT NOT NULL DEFAULT '[]'"),
         ] {
             let has: bool = conn
                 .prepare("SELECT 1 FROM pragma_table_info('meetings') WHERE name=?1")?
@@ -142,7 +153,7 @@ impl Store {
         conn.execute("UPDATE meetings SET clusterer=NULL WHERE clusterer IS NOT NULL", [])?;
         // A crash or force-quit can leave a meeting marked as recording; nothing is recording now.
         conn.execute("UPDATE meetings SET status='done', ended_at=COALESCE(ended_at, started_at) WHERE status='recording'", [])?;
-        Ok(Self { conn: Mutex::new(conn), cols: (true, true, true) })
+        Ok(Self { conn: Mutex::new(conn), cols: [true; 5] })
     }
 
     fn has_col(conn: &Connection, col: &str) -> bool {
@@ -155,7 +166,7 @@ impl Store {
     pub fn open_readonly(path: &Path) -> Result<Self> {
         let conn = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX)?;
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
-        let cols = (Self::has_col(&conn, "enhanced_by"), Self::has_col(&conn, "stt_model"), Self::has_col(&conn, "export_path"));
+        let cols = OPT_COLS.map(|c| Self::has_col(&conn, c));
         Ok(Self { conn: Mutex::new(conn), cols })
     }
 
@@ -191,12 +202,19 @@ impl Store {
 
     pub fn get_meeting(&self, id: &str) -> Result<Option<Meeting>> {
         let c = self.conn.lock();
-        let opt = |present: bool, col: &str| if present { col.to_string() } else { format!("'' AS {col}") };
+        let fallback = |col: &str| match col {
+            "enhanced_edited" => "0",
+            "speakers_guessed" => "'[]'",
+            _ => "''",
+        };
+        let opt: Vec<String> = OPT_COLS
+            .iter()
+            .zip(self.cols)
+            .map(|(col, present)| if present { col.to_string() } else { format!("{} AS {col}", fallback(col)) })
+            .collect();
         let sql = format!(
-            "SELECT id,title,created_at,started_at,ended_at,duration_ms,event_id,attendees,notes,enhanced,template,status,speakers,clusterer,meeting_url,{},{},{} FROM meetings WHERE id=?1",
-            opt(self.cols.0, "enhanced_by"),
-            opt(self.cols.1, "stt_model"),
-            opt(self.cols.2, "export_path")
+            "SELECT id,title,created_at,started_at,ended_at,duration_ms,event_id,attendees,notes,enhanced,template,status,speakers,clusterer,meeting_url,{} FROM meetings WHERE id=?1",
+            opt.join(",")
         );
         let m = c
             .query_row(
@@ -224,6 +242,8 @@ impl Store {
                         enhanced_by: r.get(15)?,
                         stt_model: r.get(16)?,
                         export_path: r.get(17)?,
+                        enhanced_edited: r.get::<_, i64>(18)? != 0,
+                        speakers_guessed: serde_json::from_str(&r.get::<_, String>(19)?).unwrap_or_default(),
                     })
                 },
             )
@@ -244,7 +264,7 @@ impl Store {
     /// Update a single editable text/json field.
     pub fn set_field(&self, id: &str, field: &str, value: &str) -> Result<()> {
         const ALLOWED: &[&str] =
-            &["title", "notes", "enhanced", "template", "status", "speakers", "attendees", "clusterer", "meeting_url", "enhanced_by", "stt_model", "export_path"];
+            &["title", "notes", "enhanced", "template", "status", "speakers", "attendees", "clusterer", "meeting_url", "enhanced_by", "stt_model", "export_path", "enhanced_edited", "speakers_guessed"];
         anyhow::ensure!(ALLOWED.contains(&field), "field {field} is not editable");
         let c = self.conn.lock();
         c.execute(&format!("UPDATE meetings SET {field}=?1 WHERE id=?2"), params![value, id])?;
@@ -445,6 +465,11 @@ mod tests {
         assert_eq!(s.list_meetings(Some("budget"), 10).unwrap().len(), 1);
         assert_eq!(s.list_meetings(None, 10).unwrap().len(), 1);
         assert!(s.set_field("m1", "id; DROP", "x").is_err());
+        s.set_field("m1", "enhanced_edited", "1").unwrap();
+        s.set_field("m1", "speakers_guessed", r#"["s1"]"#).unwrap();
+        let got = s.get_meeting("m1").unwrap().unwrap();
+        assert!(got.enhanced_edited);
+        assert_eq!(got.speakers_guessed, vec!["s1".to_string()]);
         s.delete_meeting("m1").unwrap();
         assert!(s.segments("m1").unwrap().is_empty());
     }

@@ -106,7 +106,8 @@ pub fn render_block(m: &Meeting, segs: &[Segment], opts: &ExportOptions) -> Stri
     let _ = writeln!(o, "{meta}\n");
     if !m.enhanced.trim().is_empty() {
         let by = if m.enhanced_by.is_empty() { "an AI model".to_string() } else { m.enhanced_by.clone() };
-        let _ = writeln!(o, "## Summary\n> [!info] AI summary\n> Written by {by} from the transcript and your notes. It may contain mistakes.\n");
+        let label = if m.enhanced_edited { "AI summary (edited by you)" } else { "AI summary" };
+        let _ = writeln!(o, "## Summary\n> [!info] {label}\n> Written by {by} from the transcript and your notes. It may contain mistakes.\n");
         let _ = writeln!(o, "{}\n", m.enhanced.trim());
     }
     let _ = writeln!(o, "## My notes\n");

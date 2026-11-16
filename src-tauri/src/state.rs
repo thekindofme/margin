@@ -107,6 +107,8 @@ pub struct AppState {
     pub mic_test: Mutex<Option<margin_core::audio::CaptureHandle>>,
     /// Speaker voice prints per meeting, in memory only so resuming keeps labels stable.
     pub voiceprints: Mutex<HashMap<String, margin_core::diarize::SpeakerClusterer>>,
+    /// Meeting id of a recording that auto-record started (shown loudly in the UI and tray).
+    pub auto_recording: Mutex<Option<String>>,
 }
 
 impl AppState {
@@ -129,6 +131,7 @@ impl AppState {
             busy: Mutex::new(HashMap::new()),
             mic_test: Mutex::new(None),
             voiceprints: Mutex::new(HashMap::new()),
+            auto_recording: Mutex::new(None),
         }
     }
 

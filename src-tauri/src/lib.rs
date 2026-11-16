@@ -21,6 +21,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_autostart::Builder::new().macos_launcher(tauri_plugin_autostart::MacosLauncher::LaunchAgent).build())
         .manage(AppState::new(store))
         .setup(|app| {
             let handle = app.handle().clone();
@@ -89,6 +90,9 @@ pub fn run() {
             commands::start_recording,
             commands::stop_recording,
             commands::pause_recording,
+            commands::turn_off_auto_record,
+            commands::autostart_get,
+            commands::autostart_set,
             commands::rec_state,
             commands::enhance,
             commands::identify_speakers,

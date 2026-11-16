@@ -4,6 +4,8 @@ use crate::{recorder, scheduler};
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{TrayIcon, TrayIconBuilder};
+use chrono::Utc;
+use margin_core::CalEvent;
 use tauri::{AppHandle, Emitter, Manager};
 
 const TRAY_ID: &str = "margin-tray";
@@ -18,18 +20,65 @@ pub fn show_main(app: &AppHandle) {
     }
 }
 
+/// The next calendar meeting worth a "Start notes" item: in progress or starting within 12 hours,
+/// not already prompted for, and (if the setting is on) one with people or a call link.
+fn next_event(state: &AppState) -> Option<CalEvent> {
+    let now = Utc::now();
+    let only_real = state.settings().only_real_meetings;
+    let prompted = state.prompt.lock().as_ref().and_then(|p| p.event.as_ref().map(|e| e.id.clone()));
+    state
+        .events
+        .lock()
+        .iter()
+        .filter(|e| !e.all_day && e.end > now && e.start < now + chrono::Duration::hours(12))
+        .filter(|e| !only_real || scheduler::is_real_meeting(e))
+        .filter(|e| prompted.as_deref() != Some(e.id.as_str()))
+        .min_by_key(|e| e.start)
+        .cloned()
+}
+
+fn next_label(ev: &CalEvent) -> String {
+    let title = if ev.title.trim().is_empty() { "Untitled meeting" } else { ev.title.trim() };
+    if ev.start <= Utc::now() {
+        format!("Now: {title} · Start notes")
+    } else {
+        format!("Next: {title} at {} · Start notes", ev.start.with_timezone(&chrono::Local).format("%H:%M"))
+    }
+}
+
+/// Switch auto-record off ("notify me" instead) and tell the window.
+pub fn turn_off_auto_record(app: &AppHandle) -> anyhow::Result<()> {
+    let state = app.state::<AppState>();
+    let mut s = state.settings();
+    if s.calendar_mode == "auto" {
+        s.calendar_mode = "notify".into();
+        state.save_settings(s)?;
+    }
+    let _ = app.emit("settings-changed", ());
+    refresh(app);
+    Ok(())
+}
+
 fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let state = app.state::<AppState>();
     let recording = state.recording.lock().is_some();
     let prompt = state.prompt.lock().clone();
+    let auto = state.settings().calendar_mode == "auto";
     let menu = Menu::new(app)?;
     if recording {
         menu.append(&MenuItem::with_id(app, "stop", "Stop recording", true, None::<&str>)?)?;
     } else {
         if let Some(p) = &prompt {
-            menu.append(&MenuItem::with_id(app, "prompt", format!("Take notes: {}", p.title), true, None::<&str>)?)?;
+            menu.append(&MenuItem::with_id(app, "prompt", format!("Start notes: {}", p.title), true, None::<&str>)?)?;
+        }
+        if let Some(ev) = next_event(&state) {
+            menu.append(&MenuItem::with_id(app, format!("next:{}", ev.id), next_label(&ev), true, None::<&str>)?)?;
         }
         menu.append(&MenuItem::with_id(app, "quick", "Start a quick note", true, None::<&str>)?)?;
+    }
+    if auto {
+        menu.append(&PredefinedMenuItem::separator(app)?)?;
+        menu.append(&MenuItem::with_id(app, "autorec_off", "Auto-record: on — Turn off", true, None::<&str>)?)?;
     }
     menu.append(&PredefinedMenuItem::separator(app)?)?;
     menu.append(&MenuItem::with_id(app, "open", "Open Margin", true, None::<&str>)?)?;
@@ -54,6 +103,25 @@ pub fn init(app: &AppHandle) -> tauri::Result<TrayIcon> {
                 }
                 "stop" => {
                     let _ = recorder::stop(&app, true);
+                }
+                "autorec_off" => {
+                    if let Err(e) = turn_off_auto_record(&app) {
+                        recorder::notify(&app, "Couldn't turn off auto-record", &e.to_string());
+                    } else {
+                        recorder::notify(&app, "Auto-record is off", "Margin will notify you when meetings start instead.");
+                    }
+                }
+                id if id.starts_with("next:") => {
+                    let ev_id = id["next:".len()..].to_string();
+                    std::thread::spawn(move || {
+                        let ev = app.state::<AppState>().events.lock().iter().find(|e| e.id == ev_id).cloned();
+                        if let Some(ev) = ev {
+                            if let Err(e) = scheduler::start_for_event(&app, &ev) {
+                                recorder::notify(&app, "Couldn't start", &e.to_string());
+                            }
+                        }
+                        show_main(&app);
+                    });
                 }
                 "quick" => {
                     std::thread::spawn(move || {
@@ -106,7 +174,12 @@ pub fn refresh(app: &AppHandle) {
     let recording = state.recording.lock().is_some();
     // Only rebuild when something visible changed, so an open menu isn't yanked away.
     static LAST: parking_lot::Mutex<Option<String>> = parking_lot::Mutex::new(None);
-    let key = format!("{recording}|{:?}", state.prompt.lock().as_ref().map(|p| p.title.clone()));
+    let next = next_event(&state).map(|e| format!("{}|{}", e.id, next_label(&e)));
+    let key = format!(
+        "{recording}|{:?}|{}|{next:?}",
+        state.prompt.lock().as_ref().map(|p| p.title.clone()),
+        state.settings().calendar_mode
+    );
     {
         let mut last = LAST.lock();
         if last.as_deref() == Some(key.as_str()) {
