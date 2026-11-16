@@ -567,6 +567,83 @@ fn check_captures(r: &Restarter, watch: &mut [SourceWatch; 2], paused: bool, sin
     }
 }
 
+/// Pause-finding frame: 20 ms at 16 kHz.
+const TURN_FRAME: usize = 320;
+/// A dip this long (in frames) between words can be a change of speaker.
+const TURN_MIN_PAUSE_FRAMES: usize = 8; // 160 ms
+/// Voice-print window on each side of a candidate cut.
+const TURN_WINDOW: usize = 2 * SAMPLE_RATE as usize;
+/// Each side needs at least this much audio for a usable voice print.
+const TURN_MIN_SIDE: usize = SAMPLE_RATE as usize;
+/// Below this cosine similarity, the two sides of a pause are different people.
+const TURN_CHANGE_SIM: f32 = 0.35;
+
+/// Midpoints (sample index) of pauses inside `samples` that are long enough to separate turns.
+/// A pause is a run of frames well below the utterance's speech level.
+fn pause_points(samples: &[f32]) -> Vec<usize> {
+    let rms: Vec<f32> = samples
+        .chunks(TURN_FRAME)
+        .map(|c| (c.iter().map(|x| x * x).sum::<f32>() / c.len() as f32).sqrt())
+        .collect();
+    if rms.len() < TURN_MIN_PAUSE_FRAMES * 3 {
+        return vec![];
+    }
+    let mut sorted = rms.clone();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let loud = sorted[sorted.len() * 9 / 10];
+    let quiet = (loud * 0.1).max(1e-4);
+    let mut out = Vec::new();
+    let mut run = 0usize;
+    for (i, &r) in rms.iter().enumerate() {
+        if r < quiet {
+            run += 1;
+            continue;
+        }
+        if run >= TURN_MIN_PAUSE_FRAMES && i > run {
+            out.push((i - run / 2) * TURN_FRAME);
+        }
+        run = 0;
+    }
+    out
+}
+
+/// Split a call-audio utterance where the speaker changes. Returns sample ranges covering
+/// the whole utterance. Candidate cuts are pauses; a cut is kept when the voice prints just
+/// before and just after it don't match.
+fn split_turns(samples: &[f32], emb: &mut SpeakerEmbedder) -> Vec<(usize, usize)> {
+    let whole = vec![(0, samples.len())];
+    if samples.len() < 2 * TURN_MIN_SIDE + SAMPLE_RATE as usize {
+        return whole;
+    }
+    let mut cuts = Vec::new();
+    let mut prev = 0usize;
+    for c in pause_points(samples) {
+        let left = (c.saturating_sub(TURN_WINDOW)).max(prev);
+        let right = (c + TURN_WINDOW).min(samples.len());
+        if c - left < TURN_MIN_SIDE || right - c < TURN_MIN_SIDE {
+            continue;
+        }
+        let (Ok(l), Ok(r)) = (emb.embed(&samples[left..c]), emb.embed(&samples[c..right])) else { continue };
+        let sim = crate::diarize::cosine(&l, &r);
+        log::debug!("turn candidate at {} ms: similarity {sim:.2}", c * 1000 / SAMPLE_RATE as usize);
+        if sim < TURN_CHANGE_SIM {
+            cuts.push(c);
+            prev = c;
+        }
+    }
+    if cuts.is_empty() {
+        return whole;
+    }
+    let mut out = Vec::with_capacity(cuts.len() + 1);
+    let mut a = 0;
+    for c in cuts {
+        out.push((a, c));
+        a = c;
+    }
+    out.push((a, samples.len()));
+    out
+}
+
 /// Utterances shorter than this can't create a new speaker (see worker_loop).
 const MIN_NEW_SPEAKER_SECS: f32 = 2.5;
 
@@ -614,22 +691,34 @@ fn worker_loop(
             Err(RecvTimeoutError::Disconnected) => break,
         };
         if let Some(SourcedUtterance { source, utt }) = item {
-            let text = match engine.lock().transcribe(&utt.samples) {
-                Ok(t) => t,
-                Err(e) => {
-                    sink.warning(&format!("Transcription error: {e}"));
-                    String::new()
-                }
+            // Call audio often holds several people with only a short pause between turns, so a
+            // long utterance is cut wherever the voice changes; each piece gets its own speaker.
+            let pieces = match (&embedder, source) {
+                (Some(emb), AudioSource::System) => split_turns(&utt.samples, &mut emb.lock()),
+                _ => vec![(0, utt.samples.len())],
             };
-            if !text.is_empty() {
+            for (a, b) in pieces {
+                let samples = &utt.samples[a..b];
+                let start_ms = utt.start_ms + a as u64 * 1000 / SAMPLE_RATE as u64;
+                let end_ms = utt.start_ms + b as u64 * 1000 / SAMPLE_RATE as u64;
+                let text = match engine.lock().transcribe(samples) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        sink.warning(&format!("Transcription error: {e}"));
+                        String::new()
+                    }
+                };
+                if text.is_empty() {
+                    continue;
+                }
                 let speaker = match source {
                     AudioSource::Mic => "me".to_string(),
                     AudioSource::System => {
-                        let dur = utt.samples.len() as f32 / SAMPLE_RATE as f32;
+                        let dur = samples.len() as f32 / SAMPLE_RATE as f32;
                         match &embedder {
                             // Short clips give noisy voice prints: they may only match someone already
                             // heard. Only a longer utterance can introduce a new speaker.
-                            Some(emb) if dur >= 0.8 => match emb.lock().embed(&utt.samples) {
+                            Some(emb) if dur >= 0.8 => match emb.lock().embed(samples) {
                                 Ok(v) if dur < MIN_NEW_SPEAKER_SECS => match clusterer.nearest(&v) {
                                     Some(i) => format!("s{}", i + 1 + speaker_base),
                                     None => format!("s{}", clusterer.assign(&v) + 1 + speaker_base),
@@ -642,14 +731,7 @@ fn worker_loop(
                         }
                     }
                 };
-                let seg = Segment {
-                    id: 0,
-                    start_ms: utt.start_ms,
-                    end_ms: utt.end_ms(),
-                    source,
-                    speaker: speaker.clone(),
-                    text,
-                };
+                let seg = Segment { id: 0, start_ms, end_ms, source, speaker: speaker.clone(), text };
                 match source {
                     AudioSource::Mic => pending_mic.push((seg, Instant::now())),
                     AudioSource::System => {
@@ -675,6 +757,26 @@ fn worker_loop(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn tone(secs: f32) -> Vec<f32> {
+        (0..(secs * SAMPLE_RATE as f32) as usize).map(|i| 0.3 * (i as f32 * 0.07).sin()).collect()
+    }
+
+    #[test]
+    fn finds_short_pauses_between_turns() {
+        let gap = vec![0.0f32; SAMPLE_RATE as usize * 3 / 10]; // 300 ms
+        let tiny = vec![0.0f32; SAMPLE_RATE as usize / 20]; // 50 ms: a gap inside a word
+        let mut a = tone(2.0);
+        a.extend(&gap);
+        a.extend(tone(1.5));
+        a.extend(&tiny);
+        a.extend(tone(1.5));
+        let p = pause_points(&a);
+        assert_eq!(p.len(), 1, "{p:?}");
+        let at = p[0] as f32 / SAMPLE_RATE as f32;
+        assert!((2.0..2.3).contains(&at), "cut at {at}s");
+        assert!(pause_points(&tone(5.0)).is_empty());
+    }
 
     fn seg(src: AudioSource, a: u64, b: u64, t: &str) -> Segment {
         Segment { id: 0, start_ms: a, end_ms: b, source: src, speaker: String::new(), text: t.into() }
