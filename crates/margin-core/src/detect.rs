@@ -7,6 +7,12 @@ pub fn mic_in_use() -> bool {
     imp::mic_in_use()
 }
 
+/// True when any process is playing through the default output device. While nothing plays,
+/// ScreenCaptureKit may deliver no audio buffers at all, so a gap then isn't a lost stream.
+pub fn output_in_use() -> bool {
+    imp::output_in_use()
+}
+
 /// Display names of known meeting apps that are currently running (Zoom, Teams, Webex, Slack, FaceTime, Discord...).
 pub fn running_meeting_apps() -> Vec<String> {
     imp::running_meeting_apps()
@@ -83,6 +89,7 @@ mod imp {
 
     const SYSTEM_OBJECT: u32 = 1;
     const DEFAULT_INPUT_DEVICE: u32 = 0x6449_6E20; // 'dIn '
+    const DEFAULT_OUTPUT_DEVICE: u32 = 0x644F_7574; // 'dOut'
     const IS_RUNNING_SOMEWHERE: u32 = 0x676F_6E65; // 'gone'
     const SCOPE_GLOBAL: u32 = 0x676C_6F62; // 'glob'
     const ELEMENT_MAIN: u32 = 0;
@@ -168,6 +175,13 @@ mod imp {
         (status == 0).then_some(value)
     }
 
+    pub fn output_in_use() -> bool {
+        match get_u32(SYSTEM_OBJECT, DEFAULT_OUTPUT_DEVICE) {
+            Some(dev) if dev != 0 => get_u32(dev, IS_RUNNING_SOMEWHERE).map(|v| v != 0).unwrap_or(false),
+            _ => false,
+        }
+    }
+
     pub fn mic_in_use() -> bool {
         let Some(dev) = get_u32(SYSTEM_OBJECT, DEFAULT_INPUT_DEVICE) else {
             return false;
@@ -205,6 +219,9 @@ mod imp {
     }
     pub fn meeting_app_capturing_input() -> Option<Option<String>> {
         None
+    }
+    pub fn output_in_use() -> bool {
+        false
     }
 }
 

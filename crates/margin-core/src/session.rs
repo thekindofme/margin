@@ -541,8 +541,11 @@ fn check_captures(r: &Restarter, watch: &mut [SourceWatch; 2], paused: bool, sin
     }
     if !paused {
         for src in [AudioSource::Mic, AudioSource::System] {
-            let stalled = watch[src as usize].last_frame.map(|t| t.elapsed() > CAPTURE_STALL).unwrap_or(false);
-            if stalled {
+            let w = &watch[src as usize];
+            let stalled = !w.lost && w.last_frame.map(|t| t.elapsed() > CAPTURE_STALL).unwrap_or(false);
+            // ScreenCaptureKit may send nothing while nothing plays: a system gap only counts
+            // while the output device is in use (an SCK stop is also reported by its delegate).
+            if stalled && (src == AudioSource::Mic || crate::detect::output_in_use()) {
                 lose(src, format!("no audio for {} s", CAPTURE_STALL.as_secs()), watch);
             }
         }
