@@ -1,0 +1,84 @@
+// Design-preview bridge: only active when the page is opened outside the Tauri app.
+(function () {
+  if (window.__TAURI__) return;
+  const now = Date.now();
+  const iso = (ms) => new Date(ms).toISOString();
+  const listeners = {};
+  const emit = (ev, payload) => (listeners[ev] || []).forEach((f) => f({ payload }));
+  const people = [
+    { name: "Priya Shah", email: "priya@acme.co", is_self: false },
+    { name: "Sam Okafor", email: "sam@acme.co", is_self: false },
+    { name: "Alex", email: "me@example.com", is_self: true },
+  ];
+  const segs = [
+    [0, "s1", "Okay, let's get going. Main thing today is the beta date."],
+    [5200, "me", "Right, I think QA needs at least until Thursday to finish the regression pass."],
+    [11800, "s2", "Thursday works if we freeze scope tomorrow. Design is basically done."],
+    [18500, "s1", "Then let's say beta ships Friday, and Sam owns the release notes."],
+    [24600, "me", "Sounds good. I'll update the onboarding copy before then."],
+  ].map(([t, sp, text], i) => ({ id: i + 1, start_ms: t, end_ms: t + 4800, source: sp === "me" ? "mic" : "system", speaker: sp, text }));
+  const db = {
+    settings: { model_id: "parakeet-v2", language: "auto", provider: null, provider_model: "", capture_system: true, mic_device: null, calendar_mode: "notify", auto_stop: true, detect_calls: true, only_real_meetings: true, auto_enhance: true, diarize: true, default_template: "auto", user_name: "Alex", onboarded: location.hash !== "#onboarding" },
+    meetings: [
+      { id: "m1", title: "Beta launch sync", created_at: iso(now - 3600e3), started_at: null, ended_at: null, duration_ms: 1860000, event_id: null, attendees: people, notes: "beta date?\nQA timeline\ncopy", enhanced: "### Beta launch\n- Beta ships **Friday**; scope freezes tomorrow\n- QA needs until Thursday for the regression pass\n- Design is effectively complete\n\n### Action items\n- [ ] Sam — write release notes (before Friday)\n- [ ] Alex — update onboarding copy\n- [ ] Priya — confirm scope freeze with eng", template: "team", status: "done", speakers: { s1: "Priya Shah", s2: "Sam Okafor" }, clusterer: null, meeting_url: "https://zoom.us/j/123" },
+      { id: "m2", title: "1:1 with Dana", created_at: iso(now - 26 * 3600e3), duration_ms: 1500000, attendees: [], notes: "", enhanced: "### Updates\n- Hiring loop for the infra role closes next week", template: "one_on_one", status: "done", speakers: {}, meeting_url: null },
+      { id: "m3", title: "Customer call — Northwind", created_at: iso(now - 4 * 86400e3), duration_ms: 2700000, attendees: [], notes: "pricing pushback", enhanced: "", template: "customer", status: "done", speakers: {}, meeting_url: null },
+    ],
+    segments: { m1: segs, m2: [], m3: [] },
+    chats: { m1: [] },
+  };
+  const models = [
+    ["parakeet-v2", "Parakeet TDT 0.6B v2", "The sharpest English model for everyday meetings", 451, ["en"], 0.86, 0.86, false, true, true],
+    ["parakeet-v3", "Parakeet TDT 0.6B v3", "Fast, accurate notes in 25 European languages", 456, ["en", "de", "fr"], 0.82, 0.86, false, true, true],
+    ["canary-180m-flash", "Canary 180M Flash", "Tiny and instant, runs well on any hardware", 146, ["en", "de", "es", "fr"], 0.75, 0.92, true, true, true],
+    ["cohere", "Cohere Transcribe", "Highest accuracy, 14 languages, slower", 1708, Array(14).fill("x"), 0.92, 0.55, false, false, true],
+    ["whisper-medium", "Whisper Medium", "Broadest language coverage, a little slower", 469, Array(99).fill("x"), 0.78, 0.45, true, false, true],
+  ].map(([id, name, tagline, size_mb, languages, accuracy, speed, translate, live, recommended], i) => ({ id, name, tagline, size_mb, languages, accuracy, speed, translate, live, recommended, downloaded: i === 0, language_label: languages.length === 1 ? "English only" : `${languages.length} languages` }));
+  const events = [
+    { event: { id: "e1", title: "Design review", start: iso(now - 2 * 60e3), end: iso(now + 28 * 60e3), attendees: people, location: null, meeting_url: "https://meet.google.com/abc", calendar: "Work", calendar_color: null, all_day: false }, real: true, meeting_id: null },
+    { event: { id: "e2", title: "Roadmap planning", start: iso(now + 2 * 3600e3), end: iso(now + 3 * 3600e3), attendees: people.slice(0, 2), location: null, meeting_url: null, calendar: "Work", calendar_color: null, all_day: false }, real: true, meeting_id: null },
+  ];
+  const handlers = {
+    get_settings: () => db.settings,
+    save_settings: ({ settings }) => (db.settings = settings),
+    permissions: () => ({ microphone: "granted", system_audio: "granted", calendar: "granted", notifications: "not_determined" }),
+    grant_permission: ({ kind }) => ({ status: "not_determined", opened_settings: true }),
+    current_prompt: () => (location.hash === "#prompt" ? { kind: "calendar", title: "Design review", event: events[0].event, app: null, at: iso(now) } : null),
+    list_meetings: ({ query }) => db.meetings.filter((m) => !query || m.title.toLowerCase().includes(query.toLowerCase())).map((m) => ({ ...m, snippet: m.enhanced.slice(0, 200) })),
+    list_models: () => ({ models, active: db.settings.model_id, downloading: [], speaker_model: true }),
+    upcoming_events: () => events,
+    providers: () => ({
+      providers: [
+        { id: "claude", name: "Claude Haiku", available: true, signed_in: true, model: "haiku", detail: "Signed in with your Claude subscription" },
+        { id: "codex", name: "Codex Luna", available: true, signed_in: true, model: "gpt-6-luna", detail: "Logged in using ChatGPT" },
+        { id: "ollama", name: "Ollama (on-device)", available: false, signed_in: false, model: "", detail: "Fully offline option: install Ollama and pull a model" },
+      ],
+      templates: [{ id: "auto", name: "Auto" }, { id: "one_on_one", name: "1:1" }, { id: "team", name: "Team meeting" }, { id: "customer", name: "Customer call" }],
+    }),
+    get_meeting: ({ id }) => ({ meeting: db.meetings.find((m) => m.id === id), segments: db.segments[id] || [], chats: db.chats[id] || [], busy: null }),
+    create_meeting: () => { const m = { id: "n" + Date.now(), title: "", created_at: iso(Date.now()), duration_ms: 0, attendees: [], notes: "", enhanced: "", template: "auto", status: "draft", speakers: {}, meeting_url: null }; db.meetings.unshift(m); db.segments[m.id] = []; return m; },
+    update_meeting: ({ id, field, value }) => { db.meetings.find((m) => m.id === id)[field] = value; },
+    ask_all: async () => { await new Promise(r=>setTimeout(r,600)); return "- The beta ships **Friday** (Beta launch sync, Sat 31 Oct)\n- Sam owns the release notes"; },
+    agents_status: () => ({ cli_bundled: true, cli_installed: false, cli_path: "~/.local/bin/margin", claude_available: true, claude_connected: true, codex_available: true, codex_connected: false }),
+    agent_connect: () => "Connected",
+    audio_devices: () => ({ inputs: ["MacBook Air Microphone", "AirPods Pro", "Shure MV7"], default_input: "MacBook Air Microphone", default_output: "AirPods Pro", selected: null, active: "MacBook Air Microphone", capture_system: true }),
+    set_mic: () => null,
+    mic_test: () => null,
+    probe_mics: async () => { await new Promise(r=>setTimeout(r,1500)); return [{name:"MacBook Air Microphone",peak:0,digital_silence:true,error:null},{name:"AirPods Pro",peak:0.004,digital_silence:false,error:null},{name:"Shure MV7",peak:0.21,digital_silence:false,error:null}]; },
+    calendar_sources: () => ({ feeds: [], calendars_with_events: ["Work"], event_count: 2 }),
+    meeting_audio: ({id}) => id === "m1" ? [{offset_ms: 0, path: "/x/0.m4a"}] : [],
+    audio_storage: () => ({ bytes: 48e6 }),
+    obsidian_vaults: () => [{name:"second-brain", path:"~/Notes/second-brain"}],
+    obsidian_export_all: () => 12,
+    input_devices: () => ["MacBook Air Microphone"],
+    rec_state: () => emit("rec-state", location.hash === "#rec" ? { recording: true, meeting_id: "m1", paused: false, elapsed_ms: 754000, system_audio: true } : { recording: false }),
+    start_recording: ({ id }) => emit("rec-state", { recording: true, meeting_id: id, paused: false, elapsed_ms: 0, system_audio: true }),
+    stop_recording: () => emit("rec-state", { recording: false }),
+    ask: ({ id, question }) => { (db.chats[id] ||= []).push({ role: "user", content: question }, { role: "assistant", content: "- Beta ships **Friday**\n- Scope freezes tomorrow" }); return ""; },
+  };
+  window.__TAURI__ = {
+    core: { convertFileSrc: (p) => p, invoke: async (cmd, args) => (handlers[cmd] ? handlers[cmd](args || {}) : null) },
+    event: { listen: async (ev, fn) => { (listeners[ev] ||= []).push(fn); return () => {}; } },
+  };
+  setInterval(() => { emit("levels", { mic: Math.random() * 0.3, system: Math.random() * 0.25 }); emit("mic-test", { level: Math.random() * 0.3, digital_silence: false }); }, 100);
+})();

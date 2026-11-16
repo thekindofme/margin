@@ -1,0 +1,149 @@
+mod commands;
+mod export;
+mod ics;
+mod recorder;
+mod scheduler;
+mod state;
+mod tray;
+
+use state::AppState;
+use std::sync::Arc;
+use tauri::{Manager, RunEvent, WindowEvent};
+
+pub fn run() {
+    init_logging();
+    // Use CoreML/Metal acceleration where the engine supports it.
+    transcribe_rs_accel();
+
+    let store = Arc::new(margin_core::store::Store::open_default().expect("open database"));
+    tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| tray::show_main(app)))
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .manage(AppState::new(store))
+        .setup(|app| {
+            let handle = app.handle().clone();
+            tray::init(&handle)?;
+            if let Ok(dir) = std::env::var("MARGIN_SELFTEST") {
+                recorder::selftest(handle.clone(), dir.into());
+                return Ok(());
+            }
+            if let Some(secs) = std::env::var("MARGIN_TEST_EVENT").ok().and_then(|v| v.parse().ok()) {
+                recorder::calendar_selftest(handle.clone(), secs);
+            }
+            // Opt-in recordings: enforce the retention window.
+            let days = handle.state::<AppState>().settings().audio_retention_days;
+            std::thread::spawn(move || {
+                let n = margin_core::audio_rec::enforce_retention(days);
+                if n > 0 {
+                    log::info!("deleted {n} recordings older than {days} days");
+                }
+            });
+            scheduler::spawn(handle.clone());
+            // Warm the speech model so the first recording starts instantly.
+            std::thread::spawn(move || {
+                let st = handle.state::<AppState>();
+                if st.settings().model_id.is_some() {
+                    if let Err(e) = recorder::ensure_engine(&st) {
+                        log::warn!("model warm-up failed: {e}");
+                    }
+                }
+            });
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            commands::get_settings,
+            commands::save_settings,
+            commands::permissions,
+            commands::grant_permission,
+            commands::open_permission_settings,
+            commands::restart_app,
+            commands::input_devices,
+            commands::audio_devices,
+            commands::set_mic,
+            commands::mic_test,
+            commands::probe_mics,
+            commands::list_models,
+            commands::download_model,
+            commands::cancel_download,
+            commands::delete_model,
+            commands::providers,
+            commands::upcoming_events,
+            commands::current_prompt,
+            commands::add_calendar_feed,
+            commands::remove_calendar_feed,
+            commands::calendar_sources,
+            commands::dismiss_prompt,
+            commands::start_event,
+            commands::list_meetings,
+            commands::get_meeting,
+            commands::create_meeting,
+            commands::update_meeting,
+            commands::update_segment,
+            commands::delete_meeting,
+            commands::meeting_audio,
+            commands::delete_meeting_audio,
+            commands::audio_storage,
+            commands::rename_speaker,
+            commands::start_recording,
+            commands::stop_recording,
+            commands::pause_recording,
+            commands::rec_state,
+            commands::enhance,
+            commands::identify_speakers,
+            commands::ask,
+            commands::ask_all,
+            commands::export_markdown,
+            commands::obsidian_vaults,
+            commands::obsidian_export_all,
+            commands::open_in_obsidian,
+            commands::agents_status,
+            commands::agent_connect,
+        ])
+        .build(tauri::generate_context!())
+        .expect("error while building Margin")
+        .run(|app, event| match event {
+            // Closing the window keeps Margin in the menu bar so it can catch meetings.
+            RunEvent::WindowEvent { label, event: WindowEvent::CloseRequested { api, .. }, .. } if label == "main" => {
+                api.prevent_close();
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.hide();
+                }
+            }
+            #[cfg(target_os = "macos")]
+            RunEvent::Reopen { .. } => tray::show_main(app),
+            RunEvent::ExitRequested { .. } => {
+                recorder::stop_and_wait(app, std::time::Duration::from_secs(20));
+            }
+            _ => {}
+        });
+}
+
+fn transcribe_rs_accel() {
+    // Plain CPU int8 is the fast path on Apple Silicon; ONNX engines don't benefit from CoreML
+    // (and some, like Canary, fail on it). Whisper still uses Metal via whisper.cpp.
+    margin_core::transcribe_rs::set_ort_accelerator(margin_core::transcribe_rs::OrtAccelerator::CpuOnly);
+}
+
+/// Log to ~/Library/Application Support/Margin/margin.log (rotated at 5 MB) and stderr.
+fn init_logging() {
+    use std::io::Write;
+    let path = margin_core::paths::data_dir().join("margin.log");
+    if std::fs::metadata(&path).map(|m| m.len() > 5 << 20).unwrap_or(false) {
+        let _ = std::fs::rename(&path, path.with_extension("log.1"));
+    }
+    let file = std::fs::OpenOptions::new().create(true).append(true).open(&path).ok();
+    let file = std::sync::Mutex::new(file);
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info,ort=warn,whisper_rs=warn"))
+        .format(move |buf, rec| {
+            let line = format!("{} {:<5} {}: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), rec.level(), rec.target(), rec.args());
+            if let Ok(mut f) = file.lock() {
+                if let Some(f) = f.as_mut() {
+                    let _ = writeln!(f, "{line}");
+                }
+            }
+            writeln!(buf, "{line}")
+        })
+        .init();
+}

@@ -1,0 +1,7 @@
+*.part
+.DS_Store
+.claude/
+/target
+design/*.log
+src-tauri/gen
+src-tauri/tauri.local.conf.json

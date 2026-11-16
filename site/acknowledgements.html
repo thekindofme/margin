@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="canonical" href="https://margin.yasithfernando.com/acknowledgements.html">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Acknowledgements — Margin</title>
+<meta name="description" content="The open models and libraries Margin is built with, and their licenses.">
+<meta name="theme-color" content="#f3efe6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161514" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="assets/favicon.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="page">
+  <div class="rule" aria-hidden="true"></div>
+  <header class="top">
+    <a class="brand" href="./"><img src="assets/app-icon.webp" alt="" width="30" height="30">Margin</a>
+    <nav class="nav" aria-label="Site">
+      <a href="./#how">How it works</a>
+      <a href="./#privacy">Privacy</a>
+      <a href="./#agents">Agents</a>
+      <a href="./#faq">FAQ</a>
+      <a href="https://github.com/thekindofme/margin">GitHub</a>
+    </nav>
+  </header>
+  <main id="main" class="doc">
+    <aside class="doc-aside">
+      <nav aria-label="Legal pages">
+        <a href="privacy.html">Privacy</a>
+        <a href="terms.html">Terms</a>
+        <a href="license.html">License</a>
+        <a href="acknowledgements.html" aria-current="page">Acknowledgements</a>
+        <a href="consent.html">Recording consent</a>
+      </nav>
+    </aside>
+    <article class="doc-body">
+      <h1>Acknowledgements</h1>
+      <p class="updated">Last updated 16 November 2026</p>
+      <p>Margin stands on open models and open-source libraries. Thank you to everyone who made and shared them. Each keeps its own license, listed below.</p>
+      <p>Speech and speaker models aren't bundled with Margin. You download the ones you choose, and they come under the licenses of their authors. Several are licensed CC-BY-4.0, which asks for attribution; this page is where Margin gives it.</p>
+      <div class="note"><p>Entries marked <span class="uv">to confirm</span> haven't yet been checked against the current model card or repository. Always treat the original source as authoritative.</p></div>
+
+      <h2>Models</h2>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th scope="col">Model</th><th scope="col">From</th><th scope="col">License</th><th scope="col">Used for</th></tr></thead>
+        <tbody>
+<tr><td>Parakeet TDT 0.6B v2 and v3</td><td>NVIDIA</td><td>CC-BY-4.0 </td><td>Speech to text</td></tr>
+<tr><td>Canary 180M Flash, Canary 1B v2</td><td>NVIDIA</td><td>CC-BY-4.0 <span class="uv">to confirm</span></td><td>Speech to text</td></tr>
+<tr><td>Whisper Small, Medium, Large v3 Turbo</td><td>OpenAI</td><td>MIT </td><td>Speech to text, GGML conversions from whisper.cpp</td></tr>
+<tr><td>Moonshine Base</td><td>Useful Sensors</td><td>MIT </td><td>Speech to text, English</td></tr>
+<tr><td>Moonshine v2 Medium (streaming)</td><td>Useful Sensors / Moonshine AI</td><td>See model card <span class="uv">to confirm</span></td><td>Speech to text, English</td></tr>
+<tr><td>SenseVoice Small</td><td>FunAudioLLM (Alibaba)</td><td>FunASR model license <span class="uv">to confirm</span></td><td>Speech to text, zh/yue/en/ja/ko</td></tr>
+<tr><td>Cohere Transcribe</td><td>Cohere</td><td>See model card <span class="uv">to confirm</span></td><td>Speech to text, 14 languages</td></tr>
+<tr><td>WeSpeaker ResNet34 (VoxCeleb)</td><td>WeSpeaker</td><td>CC-BY-4.0 <span class="uv">to confirm</span></td><td>Speaker embeddings, via sherpa-onnx releases</td></tr>
+        </tbody>
+      </table></div>
+
+      <h2>Libraries and tools</h2>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th scope="col">Project</th><th scope="col">From</th><th scope="col">License</th><th scope="col">Used for</th></tr></thead>
+        <tbody>
+<tr><td>Tauri</td><td>Tauri Programme</td><td>MIT or Apache-2.0 </td><td>App shell</td></tr>
+<tr><td>transcribe-rs</td><td>CJ Pais</td><td>MIT </td><td>Speech engines</td></tr>
+<tr><td>ONNX Runtime, via ort</td><td>Microsoft; pyke</td><td>MIT; MIT or Apache-2.0 </td><td>Model inference</td></tr>
+<tr><td>whisper.cpp, via whisper-rs</td><td>ggml authors; whisper-rs authors</td><td>MIT; Unlicense </td><td>Whisper inference, Metal</td></tr>
+<tr><td>SQLite, via rusqlite</td><td>SQLite authors; rusqlite authors</td><td>Public domain; MIT </td><td>Local storage</td></tr>
+<tr><td>cpal</td><td>RustAudio</td><td>Apache-2.0 </td><td>Microphone capture</td></tr>
+<tr><td>screencapturekit-rs</td><td>screencapturekit-rs authors</td><td>MIT or Apache-2.0 </td><td>System audio capture</td></tr>
+<tr><td>reqwest, rustls</td><td>seanmonstar; rustls authors</td><td>MIT or Apache-2.0 </td><td>Downloads and calendar feeds</td></tr>
+<tr><td>rrule</td><td>rrule-rs authors</td><td>MIT or Apache-2.0 </td><td>Recurring calendar events</td></tr>
+<tr><td>hound</td><td>Ruud van Asseldonk</td><td>Apache-2.0 </td><td>WAV files</td></tr>
+<tr><td>Handy</td><td>CJ Pais</td><td>MIT <span class="uv">to confirm</span></td><td>Model catalogue and download mirror</td></tr>
+<tr><td>Newsreader typeface</td><td>Production Type</td><td>SIL Open Font License 1.1 </td><td>This website</td></tr>
+        </tbody>
+      </table></div>
+      <p>Library licenses are taken from each crate's published metadata. The full dependency list, with license texts, ships with the source code.</p>
+
+      <h2>Works with</h2>
+      <p>Margin can use Claude Code (Anthropic), Codex (OpenAI) and Ollama when you have them installed. They're separate products under their own terms and aren't part of Margin.</p>
+
+    </article>
+  </main>
+  <footer class="foot">
+    <a class="brand" href="./"><img src="assets/app-icon.webp" alt="" width="22" height="22" loading="lazy">Margin</a>
+    <div class="foot-body">
+      <p>This site has no cookies, analytics or trackers, so there's nothing to accept.</p>
+      <p><a href="./">Back to the home page</a></p>
+    </div>
+  </footer>
+</div>
+</body>
+</html>

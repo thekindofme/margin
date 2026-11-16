@@ -1,0 +1,144 @@
+use chrono::{DateTime, Utc};
+use margin_core::diarize::SpeakerEmbedder;
+use margin_core::llm::{Provider, ProviderInfo};
+use margin_core::session::Session;
+use margin_core::store::Store;
+use margin_core::stt::Transcriber;
+use margin_core::CalEvent;
+use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use std::time::Instant;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Settings {
+    pub model_id: Option<String>,
+    /// "auto" or a language code.
+    pub language: String,
+    pub provider: Option<Provider>,
+    pub provider_model: String,
+    pub capture_system: bool,
+    pub mic_device: Option<String>,
+    /// What to do when a calendar meeting starts: "notify" | "auto" | "off".
+    pub calendar_mode: String,
+    /// Stop recording automatically when the calendar event is over and the room goes quiet.
+    pub auto_stop: bool,
+    /// Notice calls started outside the calendar (Zoom/Teams/... using the mic).
+    pub detect_calls: bool,
+    /// Only meetings with other people or a call link count (skip focus blocks etc.).
+    pub only_real_meetings: bool,
+    pub auto_enhance: bool,
+    pub diarize: bool,
+    pub default_template: String,
+    pub user_name: String,
+    pub onboarded: bool,
+    /// Read-only iCal subscriptions (e.g. Google Calendar's secret address).
+    pub calendar_feeds: Vec<crate::ics::Feed>,
+    /// Opt-in: keep a compressed local recording of each meeting.
+    pub keep_audio: bool,
+    /// Delete kept recordings after this many days (0 = keep until deleted).
+    pub audio_retention_days: u32,
+    /// Mirror every meeting as Markdown into an Obsidian vault / folder (None = off).
+    pub obsidian: Option<margin_core::obsidian::ExportOptions>,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            model_id: None,
+            language: "auto".into(),
+            provider: None,
+            provider_model: String::new(),
+            capture_system: true,
+            mic_device: None,
+            calendar_mode: "notify".into(),
+            auto_stop: true,
+            detect_calls: true,
+            only_real_meetings: true,
+            auto_enhance: true,
+            diarize: true,
+            default_template: "auto".into(),
+            user_name: String::new(),
+            onboarded: false,
+            calendar_feeds: Vec::new(),
+            keep_audio: false,
+            audio_retention_days: 30,
+            obsidian: None,
+        }
+    }
+}
+
+pub struct ActiveRecording {
+    pub meeting_id: String,
+    pub session: Session,
+    pub event_end: Option<DateTime<Utc>>,
+    /// Last time anyone said something (for auto-stop).
+    pub last_speech: Arc<Mutex<Instant>>,
+    pub offset_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Prompt {
+    /// "calendar" | "call"
+    pub kind: String,
+    pub title: String,
+    pub event: Option<CalEvent>,
+    pub app: Option<String>,
+    pub at: DateTime<Utc>,
+}
+
+pub struct AppState {
+    pub store: Arc<Store>,
+    pub settings: Mutex<Settings>,
+    pub engine: Mutex<Option<Arc<Mutex<Transcriber>>>>,
+    pub engine_loading: AtomicBool,
+    pub embedder: Mutex<Option<Arc<Mutex<SpeakerEmbedder>>>>,
+    pub recording: Mutex<Option<ActiveRecording>>,
+    pub downloads: Mutex<HashMap<String, Arc<AtomicBool>>>,
+    pub providers: Mutex<Option<Vec<ProviderInfo>>>,
+    pub events: Mutex<Vec<CalEvent>>,
+    pub prompt: Mutex<Option<Prompt>>,
+    /// Meetings currently being enhanced, so the UI can show progress.
+    pub busy: Mutex<HashMap<String, String>>,
+    /// Live level preview for the mic picker.
+    pub mic_test: Mutex<Option<margin_core::audio::CaptureHandle>>,
+    /// Speaker voice prints per meeting, in memory only so resuming keeps labels stable.
+    pub voiceprints: Mutex<HashMap<String, margin_core::diarize::SpeakerClusterer>>,
+}
+
+impl AppState {
+    pub fn new(store: Arc<Store>) -> Self {
+        let settings = store
+            .get_setting("settings")
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
+        Self {
+            store,
+            settings: Mutex::new(settings),
+            engine: Mutex::new(None),
+            engine_loading: AtomicBool::new(false),
+            embedder: Mutex::new(None),
+            recording: Mutex::new(None),
+            downloads: Mutex::new(HashMap::new()),
+            providers: Mutex::new(None),
+            events: Mutex::new(Vec::new()),
+            prompt: Mutex::new(None),
+            busy: Mutex::new(HashMap::new()),
+            mic_test: Mutex::new(None),
+            voiceprints: Mutex::new(HashMap::new()),
+        }
+    }
+
+    pub fn settings(&self) -> Settings {
+        self.settings.lock().clone()
+    }
+
+    pub fn save_settings(&self, s: Settings) -> anyhow::Result<()> {
+        self.store.set_setting("settings", &serde_json::to_string(&s)?)?;
+        *self.settings.lock() = s;
+        Ok(())
+    }
+}

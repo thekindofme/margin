@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Margin transcribes your meetings on this Mac. Audio never leaves your device.</string>
+  <key>NSCalendarsFullAccessUsageDescription</key>
+  <string>Margin reads your calendar to remind you when meetings start and to know who is attending.</string>
+  <key>NSCalendarsUsageDescription</key>
+  <string>Margin reads your calendar to remind you when meetings start and to know who is attending.</string>
+  <key>NSAudioCaptureUsageDescription</key>
+  <string>Margin captures meeting audio from other participants so it can transcribe them locally.</string>
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>Margin captures system audio (not your screen) so other participants are transcribed locally.</string>
+</dict>
+</plist>
