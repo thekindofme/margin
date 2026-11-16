@@ -20,6 +20,23 @@ fn quiet_after_end() -> Duration {
 }
 /// Stop regardless after this much silence (forgotten recordings).
 const MAX_SILENCE: Duration = Duration::from_secs(15 * 60);
+/// After the event ends, when we can't tell whether the call app still holds the mic but a
+/// meeting app is running, stop after this much silence instead.
+const QUIET_FALLBACK: Duration = Duration::from_secs(5 * 60);
+
+/// Whether the call looks over from the call app's side: no known meeting app is capturing
+/// the mic (Margin's own capture doesn't count).
+fn call_app_released(quiet: Duration) -> bool {
+    match detect::meeting_app_capturing_input() {
+        Some(None) => true,
+        Some(Some(app)) => {
+            log::debug!("auto-stop: {app} still uses the mic; keep recording");
+            false
+        }
+        // No per-process attribution (macOS < 14.2): any running meeting app means wait longer.
+        None => detect::running_meeting_apps().is_empty() || quiet > QUIET_FALLBACK,
+    }
+}
 
 pub fn is_real_meeting(e: &CalEvent) -> bool {
     !e.all_day && (e.meeting_url.is_some() || e.attendees.iter().filter(|a| !a.is_self).count() >= 1)
@@ -106,17 +123,18 @@ fn tick(app: &AppHandle, call_seen_at: &mut Option<Instant>) {
     let s = state.settings();
     let now = Utc::now();
 
-    // ---- auto stop
-    let should_stop = {
+    // ---- auto stop (never when the user turned it off)
+    let quiet_state = {
         let rec = state.recording.lock();
-        match rec.as_ref() {
-            Some(r) => {
-                let quiet = r.last_speech.lock().elapsed();
-                let event_over = r.event_end.map(|e| now > e).unwrap_or(false);
-                (s.auto_stop && event_over && quiet > quiet_after_end()) || quiet > MAX_SILENCE
-            }
-            _ => false,
+        rec.as_ref().map(|r| (r.last_speech.lock().elapsed(), r.event_end.map(|e| now > e).unwrap_or(false)))
+    };
+    let should_stop = match quiet_state {
+        Some((quiet, event_over)) if s.auto_stop => {
+            // Overrunning meetings with a reading pause keep recording while the call app
+            // still has the mic.
+            (event_over && quiet > quiet_after_end() && call_app_released(quiet)) || quiet > MAX_SILENCE
         }
+        _ => false,
     };
     if should_stop {
         log::info!("auto-stopping recording");

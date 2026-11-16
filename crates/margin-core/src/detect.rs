@@ -20,6 +20,22 @@ pub fn meeting_app_using_mic() -> Option<String> {
     running_meeting_apps().into_iter().next()
 }
 
+/// The known meeting app that is itself capturing audio input right now, using CoreAudio's
+/// per-process attribution (macOS 14.2+). Unlike `meeting_app_using_mic`, Margin's own
+/// recording doesn't count. `None` when per-process attribution isn't available.
+pub fn meeting_app_capturing_input() -> Option<Option<String>> {
+    imp::meeting_app_capturing_input()
+}
+
+/// Meeting app name for a process bundle id, including helper processes ("<app id>.<helper>").
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn meeting_app_for_process(bundle_id: &str) -> Option<&'static str> {
+    meeting_app_name(bundle_id).or_else(|| {
+        let (parent, _) = bundle_id.rsplit_once('.')?;
+        meeting_app_for_process(parent)
+    })
+}
+
 /// Map a bundle identifier to a meeting app display name.
 pub fn meeting_app_name(bundle_id: &str) -> Option<&'static str> {
     Some(match bundle_id {
@@ -35,7 +51,7 @@ pub fn meeting_app_name(bundle_id: &str) -> Option<&'static str> {
 
 #[cfg(target_os = "macos")]
 mod imp {
-    use super::meeting_app_name;
+    use super::{meeting_app_for_process, meeting_app_name};
     use objc2_app_kit::NSWorkspace;
     use std::ffi::c_void;
 
@@ -56,6 +72,13 @@ mod imp {
             data_size: *mut u32,
             data: *mut c_void,
         ) -> i32;
+        fn AudioObjectGetPropertyDataSize(
+            object: u32,
+            address: *const AudioObjectPropertyAddress,
+            qualifier_size: u32,
+            qualifier: *const c_void,
+            data_size: *mut u32,
+        ) -> i32;
     }
 
     const SYSTEM_OBJECT: u32 = 1;
@@ -63,6 +86,63 @@ mod imp {
     const IS_RUNNING_SOMEWHERE: u32 = 0x676F_6E65; // 'gone'
     const SCOPE_GLOBAL: u32 = 0x676C_6F62; // 'glob'
     const ELEMENT_MAIN: u32 = 0;
+    const PROCESS_OBJECT_LIST: u32 = 0x7072_7323; // 'prs#'
+    const PROCESS_BUNDLE_ID: u32 = 0x7062_6964; // 'pbid'
+    const PROCESS_IS_RUNNING_INPUT: u32 = 0x7069_7269; // 'piri'
+
+    /// Reads a list of AudioObjectIDs; None on any CoreAudio error.
+    fn get_ids(object: u32, selector: u32) -> Option<Vec<u32>> {
+        let addr = AudioObjectPropertyAddress { selector, scope: SCOPE_GLOBAL, element: ELEMENT_MAIN };
+        let mut size: u32 = 0;
+        // SAFETY: valid address struct and out-pointer for the size query; no qualifier.
+        let status = unsafe { AudioObjectGetPropertyDataSize(object, &addr, 0, std::ptr::null(), &mut size) };
+        if status != 0 {
+            return None;
+        }
+        let mut ids = vec![0u32; size as usize / std::mem::size_of::<u32>()];
+        let mut size = (ids.len() * std::mem::size_of::<u32>()) as u32;
+        // SAFETY: `ids` has room for `size` bytes, which CoreAudio won't exceed.
+        let status = unsafe {
+            AudioObjectGetPropertyData(object, &addr, 0, std::ptr::null(), &mut size, ids.as_mut_ptr() as *mut c_void)
+        };
+        if status != 0 {
+            return None;
+        }
+        ids.truncate(size as usize / std::mem::size_of::<u32>());
+        Some(ids)
+    }
+
+    /// Bundle id of a CoreAudio process object.
+    fn bundle_id(process: u32) -> Option<String> {
+        let addr = AudioObjectPropertyAddress { selector: PROCESS_BUNDLE_ID, scope: SCOPE_GLOBAL, element: ELEMENT_MAIN };
+        let mut cf: *mut c_void = std::ptr::null_mut();
+        let mut size = std::mem::size_of::<*mut c_void>() as u32;
+        // SAFETY: the property is a CFStringRef (pointer-sized out-buffer), returned +1 retained.
+        let status = unsafe {
+            AudioObjectGetPropertyData(process, &addr, 0, std::ptr::null(), &mut size, &mut cf as *mut *mut c_void as *mut c_void)
+        };
+        if status != 0 || cf.is_null() {
+            return None;
+        }
+        // SAFETY: CFString is toll-free bridged to NSString and we own the +1 reference, which
+        // `Retained` releases on drop.
+        let s = unsafe { objc2::rc::Retained::from_raw(cf as *mut objc2_foundation::NSString) }?;
+        Some(s.to_string())
+    }
+
+    pub fn meeting_app_capturing_input() -> Option<Option<String>> {
+        // Fails before macOS 14.2, where the process object list doesn't exist.
+        let processes = get_ids(SYSTEM_OBJECT, PROCESS_OBJECT_LIST)?;
+        for p in processes {
+            if get_u32(p, PROCESS_IS_RUNNING_INPUT).unwrap_or(0) == 0 {
+                continue;
+            }
+            if let Some(name) = bundle_id(p).as_deref().and_then(meeting_app_for_process) {
+                return Some(Some(name.to_string()));
+            }
+        }
+        Some(None)
+    }
 
     /// Reads a single u32 property; None on any CoreAudio error.
     fn get_u32(object: u32, selector: u32) -> Option<u32> {
@@ -122,5 +202,19 @@ mod imp {
     }
     pub fn running_meeting_apps() -> Vec<String> {
         Vec::new()
+    }
+    pub fn meeting_app_capturing_input() -> Option<Option<String>> {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn helper_processes_map_to_their_app() {
+        assert_eq!(super::meeting_app_for_process("us.zoom.xos"), Some("Zoom"));
+        assert_eq!(super::meeting_app_for_process("com.microsoft.teams2.helper"), Some("Microsoft Teams"));
+        assert_eq!(super::meeting_app_for_process("com.apple.Safari"), None);
+        assert_eq!(super::meeting_app_for_process("app.margin"), None);
     }
 }
