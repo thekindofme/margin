@@ -1556,6 +1556,9 @@ function wireEvents() {
   listen("warning", (m) => {
     if (/participants' audio|Screen Recording/i.test(m)) { S.sysWarn = "system"; renderSysWarn(); return; }
     if (/^MIC_(SILENT|QUIET)/.test(m)) { diagnoseMic(/^MIC_SILENT/.test(m) ? "silent" : "quiet"); return; }
+    const lost = /^CAPTURE_LOST:(mic|system)/.exec(m), back = /^CAPTURE_RESTORED:(mic|system)/.exec(m);
+    if (lost) { toast(lost[1] === "mic" ? "Lost the microphone. Reconnecting…" : "Lost call audio. Reconnecting…", 8000); return; }
+    if (back) { toast(back[1] === "mic" ? "Microphone is back" : "Call audio is back"); return; }
     toast(m, 5000);
   });
   listen("events-updated", () => loadEvents());
