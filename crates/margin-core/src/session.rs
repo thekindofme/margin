@@ -3,13 +3,18 @@
 //! Threads: capture callbacks push 16 kHz frames; a segmenter thread runs one VAD per source;
 //! a worker thread transcribes utterances in order, labels speakers and removes echo
 //! (your speakers leaking into your mic when you're not on headphones).
-use crate::audio::{self, CaptureHandle};
+//!
+//! The segmenter also watches the live captures: a source that stops delivering frames (mic
+//! unplugged, AirPods gone, ScreenCaptureKit stream stopped) is reported to the sink as
+//! `CAPTURE_LOST:<mic|system>: …` and restarted; `CAPTURE_RESTORED:<mic|system>` follows
+//! once audio flows again.
+use crate::audio::{self, CaptureErrors, CaptureHandle};
 use crate::diarize::{SpeakerClusterer, SpeakerEmbedder};
 use crate::stt::Transcriber;
 use crate::types::{AudioFrame, AudioSource, Segment, SAMPLE_RATE};
 use crate::vad::{Utterance, Vad, VadConfig};
 use anyhow::Result;
-use crossbeam_channel::{bounded, unbounded, Receiver, RecvTimeoutError};
+use crossbeam_channel::{bounded, unbounded, Receiver, RecvTimeoutError, Sender};
 use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -59,7 +64,10 @@ pub struct SessionResult {
 }
 
 pub struct Session {
-    captures: Vec<CaptureHandle>,
+    captures: Arc<Mutex<Captures>>,
+    capture_count: usize,
+    /// Set by `stop()`: the watchdog must not restart anything any more.
+    stopping: Arc<AtomicBool>,
     paused: Arc<AtomicBool>,
     elapsed: Arc<AtomicU64>,
     segmenter: Option<JoinHandle<()>>,
@@ -73,6 +81,115 @@ struct SourcedUtterance {
     utt: Utterance,
 }
 
+/// Running capture handles. Shared with the segmenter so it can swap in a restarted source.
+#[derive(Default)]
+struct Captures {
+    mic: Option<CaptureHandle>,
+    system: Option<CaptureHandle>,
+    other: Vec<CaptureHandle>,
+}
+
+impl Captures {
+    fn count(&self) -> usize {
+        self.mic.is_some() as usize + self.system.is_some() as usize + self.other.len()
+    }
+    fn take_all(&mut self) -> Vec<CaptureHandle> {
+        let mut v: Vec<CaptureHandle> = self.other.drain(..).collect();
+        v.extend(self.mic.take());
+        v.extend(self.system.take());
+        v
+    }
+}
+
+/// A source with no frames for this long (while not paused) counts as lost.
+const CAPTURE_STALL: Duration = Duration::from_secs(3);
+/// While a source stays lost, try restarting it this often.
+const CAPTURE_RETRY: Duration = Duration::from_secs(10);
+
+/// Lets the segmenter restart a live capture that stopped delivering audio.
+struct Restarter {
+    frame_tx: Sender<AudioFrame>,
+    err_tx: CaptureErrors,
+    err_rx: Receiver<(AudioSource, String)>,
+    mic_device: Option<String>,
+    captures: Arc<Mutex<Captures>>,
+    stopping: Arc<AtomicBool>,
+}
+
+impl Restarter {
+    fn restart(&self, source: AudioSource) -> Result<()> {
+        let new = match source {
+            AudioSource::Mic => {
+                match audio::start_mic_watched(self.mic_device.clone(), self.frame_tx.clone(), self.err_tx.clone()) {
+                    Ok(h) => h,
+                    Err(e) if self.mic_device.is_some() => {
+                        log::warn!("restarting the chosen mic failed ({e:#}); trying the system default");
+                        audio::start_mic_watched(None, self.frame_tx.clone(), self.err_tx.clone())?
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+            AudioSource::System => audio::start_system_watched(self.frame_tx.clone(), self.err_tx.clone())?,
+        };
+        let old = {
+            let mut c = self.captures.lock();
+            if self.stopping.load(Ordering::SeqCst) {
+                drop(c);
+                new.stop();
+                return Ok(());
+            }
+            match source {
+                AudioSource::Mic => c.mic.replace(new),
+                AudioSource::System => c.system.replace(new),
+            }
+        };
+        // Tearing down a dead stream can block inside CoreAudio / ScreenCaptureKit: keep it
+        // off the audio path.
+        if let Some(old) = old {
+            let _ = std::thread::Builder::new().name("margin-capture-stop".into()).spawn(move || old.stop());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+struct SourceWatch {
+    last_frame: Option<Instant>,
+    lost: bool,
+    last_try: Option<Instant>,
+}
+
+fn source_name(s: AudioSource) -> &'static str {
+    match s {
+        AudioSource::Mic => "mic",
+        AudioSource::System => "system",
+    }
+}
+
+/// System-audio progress, shared with the worker so held mic lines wait for the system side.
+#[derive(Default)]
+struct SysProgress {
+    /// Any system audio arrived.
+    seen: AtomicBool,
+    /// The system VAD is inside an utterance.
+    active: AtomicBool,
+    /// Meeting time (ms, offset included) up to which system audio went through the VAD.
+    pos_ms: AtomicU64,
+    /// System utterances sent to the worker and not yet transcribed.
+    inflight: AtomicU64,
+}
+
+impl SysProgress {
+    /// True once no system speech that could echo a mic line ending at `mic_end_ms` is still
+    /// on its way.
+    fn caught_up(&self, mic_end_ms: u64) -> bool {
+        !self.seen.load(Ordering::SeqCst)
+            || (self.inflight.load(Ordering::SeqCst) == 0
+                && !self.active.load(Ordering::SeqCst)
+                && self.pos_ms.load(Ordering::SeqCst) >= mic_end_ms + ECHO_WINDOW_MS)
+    }
+}
+
 impl Session {
     pub fn start(
         cfg: SessionConfig,
@@ -81,15 +198,16 @@ impl Session {
         sink: Arc<dyn SessionSink>,
     ) -> Result<Self> {
         let (frame_tx, frame_rx) = bounded::<AudioFrame>(512);
-        let mut captures = Vec::new();
+        let (err_tx, err_rx) = bounded::<(AudioSource, String)>(16);
+        let mut captures = Captures::default();
         if cfg.capture_mic {
-            captures.push(audio::start_mic(cfg.mic_device.clone(), frame_tx.clone())?);
+            captures.mic = Some(audio::start_mic_watched(cfg.mic_device.clone(), frame_tx.clone(), err_tx.clone())?);
         }
         let mut system_active = false;
         if cfg.capture_system {
-            match audio::start_system(frame_tx.clone()) {
+            match audio::start_system_watched(frame_tx.clone(), err_tx.clone()) {
                 Ok(h) => {
-                    captures.push(h);
+                    captures.system = Some(h);
                     system_active = true;
                 }
                 Err(e) => sink.warning(&format!(
@@ -97,9 +215,20 @@ impl Session {
                 )),
             }
         }
-        drop(frame_tx);
-        anyhow::ensure!(!captures.is_empty(), "no audio source could be started");
-        Self::run_pipeline(cfg, frame_rx, captures, system_active, engine, embedder, sink)
+        anyhow::ensure!(captures.count() > 0, "no audio source could be started");
+        let captures = Arc::new(Mutex::new(captures));
+        let stopping = Arc::new(AtomicBool::new(false));
+        // The restarter keeps a frame sender: the segmenter drops it once `stop()` begins, so
+        // the frame channel still closes when the captures stop.
+        let restarter = Restarter {
+            frame_tx,
+            err_tx,
+            err_rx,
+            mic_device: cfg.mic_device.clone(),
+            captures: captures.clone(),
+            stopping: stopping.clone(),
+        };
+        Self::run_pipeline(cfg, frame_rx, captures, stopping, Some(restarter), system_active, engine, embedder, sink)
     }
 
     /// Run the pipeline on frames from any source (files, tests). Capture ends when all
@@ -111,7 +240,7 @@ impl Session {
         embedder: Option<Arc<Mutex<SpeakerEmbedder>>>,
         sink: Arc<dyn SessionSink>,
     ) -> Result<Self> {
-        Self::run_pipeline(cfg, frame_rx, Vec::new(), true, engine, embedder, sink)
+        Self::run_pipeline(cfg, frame_rx, Default::default(), Default::default(), None, true, engine, embedder, sink)
     }
 
     /// Like `from_frames`, with handles that are stopped (so their senders close) on `stop()`.
@@ -123,13 +252,16 @@ impl Session {
         embedder: Option<Arc<Mutex<SpeakerEmbedder>>>,
         sink: Arc<dyn SessionSink>,
     ) -> Result<Self> {
-        Self::run_pipeline(cfg, frame_rx, handles, true, engine, embedder, sink)
+        let captures = Arc::new(Mutex::new(Captures { other: handles, ..Default::default() }));
+        Self::run_pipeline(cfg, frame_rx, captures, Default::default(), None, true, engine, embedder, sink)
     }
 
     fn run_pipeline(
         cfg: SessionConfig,
         frame_rx: Receiver<AudioFrame>,
-        captures: Vec<CaptureHandle>,
+        captures: Arc<Mutex<Captures>>,
+        stopping: Arc<AtomicBool>,
+        restarter: Option<Restarter>,
         system_active: bool,
         engine: Arc<Mutex<Transcriber>>,
         embedder: Option<Arc<Mutex<SpeakerEmbedder>>>,
@@ -138,6 +270,10 @@ impl Session {
         let paused = Arc::new(AtomicBool::new(false));
         let elapsed = Arc::new(AtomicU64::new(0));
         let (utt_tx, utt_rx) = unbounded::<SourcedUtterance>();
+        let capture_count = captures.lock().count();
+        let sys_progress = Arc::new(SysProgress::default());
+        let seg_progress = sys_progress.clone();
+        let seg_stopping = stopping.clone();
 
         let seg_sink = sink.clone();
         let seg_paused = paused.clone();
@@ -152,6 +288,10 @@ impl Session {
             }
         });
         let segmenter = std::thread::Builder::new().name("margin-vad".into()).spawn(move || {
+            let mut restarter = restarter;
+            let mut watch: [SourceWatch; 2] = Default::default();
+            let mut last_watch = Instant::now();
+            let mut sys_samples = 0u64;
             let mut mic_vad = Vad::new(vad_cfg.clone());
             // Remote audio is cleaner (no room noise): a slightly lower threshold catches quiet talkers.
             let mut sys_vad = Vad::new(VadConfig { threshold_db: 7.0, min_rms: 0.002, ..vad_cfg });
@@ -171,7 +311,32 @@ impl Session {
                 u.start_ms += offset;
                 let _ = utt_tx.send(SourcedUtterance { source, utt: u });
             };
-            while let Ok(frame) = frame_rx.recv() {
+            loop {
+                let frame = match frame_rx.recv_timeout(Duration::from_millis(500)) {
+                    Ok(f) => Some(f),
+                    Err(RecvTimeoutError::Timeout) => None,
+                    Err(RecvTimeoutError::Disconnected) => break,
+                };
+                if let Some(f) = frame.as_ref() {
+                    let w = &mut watch[f.source as usize];
+                    w.last_frame = Some(Instant::now());
+                    if w.lost {
+                        w.lost = false;
+                        w.last_try = None;
+                        log::info!("{} capture restored", source_name(f.source));
+                        seg_sink.warning(&format!("CAPTURE_RESTORED:{}", source_name(f.source)));
+                    }
+                }
+                if seg_stopping.load(Ordering::SeqCst) {
+                    // Drop our frame sender so the channel closes once the captures stop.
+                    restarter = None;
+                } else if last_watch.elapsed() >= Duration::from_secs(1) {
+                    last_watch = Instant::now();
+                    if let Some(r) = restarter.as_ref() {
+                        check_captures(r, &mut watch, seg_paused.load(Ordering::Relaxed), &*seg_sink);
+                    }
+                }
+                let Some(frame) = frame else { continue };
                 if seg_paused.load(Ordering::Relaxed) {
                     continue;
                 }
@@ -207,9 +372,14 @@ impl Session {
                     }
                     AudioSource::System => {
                         sys_peak = sys_peak.max(lvl);
+                        sys_samples += frame.samples.len() as u64;
                         for u in sys_vad.push(&frame.samples) {
+                            seg_progress.inflight.fetch_add(1, Ordering::SeqCst);
                             send(AudioSource::System, u);
                         }
+                        seg_progress.active.store(sys_vad.in_speech(), Ordering::SeqCst);
+                        seg_progress.pos_ms.store(offset + sys_samples * 1000 / SAMPLE_RATE as u64, Ordering::SeqCst);
+                        seg_progress.seen.store(true, Ordering::SeqCst);
                     }
                 }
                 if last_level.elapsed() >= Duration::from_millis(100) {
@@ -223,8 +393,10 @@ impl Session {
                 send(AudioSource::Mic, u);
             }
             if let Some(u) = sys_vad.flush() {
+                seg_progress.inflight.fetch_add(1, Ordering::SeqCst);
                 send(AudioSource::System, u);
             }
+            seg_progress.active.store(false, Ordering::SeqCst);
             if let Some(r) = recorder.take() {
                 match r.finish() {
                     Ok(p) => log::info!("kept meeting audio: {}", p.display()),
@@ -241,10 +413,12 @@ impl Session {
         let speaker_base = cfg.speaker_base;
         let worker = std::thread::Builder::new()
             .name("margin-stt".into())
-            .spawn(move || worker_loop(utt_rx, engine, embedder, clusterer, speaker_base, worker_sink))?;
+            .spawn(move || worker_loop(utt_rx, engine, embedder, clusterer, speaker_base, sys_progress, worker_sink))?;
 
         Ok(Self {
             captures,
+            capture_count,
+            stopping,
             paused,
             elapsed,
             segmenter: Some(segmenter),
@@ -266,7 +440,7 @@ impl Session {
     /// Recorded (unpaused) audio length in ms.
     pub fn elapsed_ms(&self) -> u64 {
         let e = self.elapsed.load(Ordering::Relaxed);
-        if e == 0 && self.captures.len() == 1 && !self.is_paused() {
+        if e == 0 && self.capture_count == 1 && !self.is_paused() {
             // System-only capture: fall back to wall clock.
             return self.started.elapsed().as_millis() as u64;
         }
@@ -276,7 +450,9 @@ impl Session {
     /// Stop capture and wait for the transcription backlog to drain.
     pub fn stop(mut self) -> SessionResult {
         let duration_ms = self.elapsed_ms();
-        for c in self.captures.drain(..) {
+        self.stopping.store(true, Ordering::SeqCst);
+        let handles = self.captures.lock().take_all();
+        for c in handles {
             c.stop();
         }
         if let Some(h) = self.segmenter.take() {
@@ -298,19 +474,94 @@ fn words(t: &str) -> Vec<String> {
         .collect()
 }
 
-/// Share of the mic text's words that also appear in the system text.
-fn overlap(mic: &str, sys: &str) -> f32 {
-    let m = words(mic);
-    if m.is_empty() {
+/// Mic and system speech this close in time can be the same audio.
+const ECHO_WINDOW_MS: u64 = 1500;
+/// Shorter mic lines are never treated as echo: short replies ("yeah, that's right") share
+/// their words with almost anything the other side says.
+const ECHO_MIN_WORDS: usize = 5;
+/// Share of the mic words that must be covered by word trigrams also said on the system side.
+const ECHO_MIN_COVERAGE: f32 = 0.6;
+/// A mic line waits at most this long for the system side to catch up before it is shown.
+const ECHO_MAX_HOLD: Duration = Duration::from_secs(6);
+
+/// Share of `mic` words that sit inside a 3-word run also found (in order) in `sys`.
+fn trigram_coverage(mic: &[String], sys: &[String]) -> f32 {
+    if mic.len() < 3 || sys.len() < 3 {
         return 0.0;
     }
-    let s: std::collections::HashSet<String> = words(sys).into_iter().collect();
-    m.iter().filter(|w| s.contains(*w)).count() as f32 / m.len() as f32
+    let grams: std::collections::HashSet<&[String]> = sys.windows(3).collect();
+    let mut covered = vec![false; mic.len()];
+    for (i, g) in mic.windows(3).enumerate() {
+        if grams.contains(g) {
+            covered[i..i + 3].iter_mut().for_each(|c| *c = true);
+        }
+    }
+    covered.iter().filter(|c| **c).count() as f32 / mic.len() as f32
 }
 
-fn is_echo(mic: &Segment, sys: &Segment) -> bool {
-    let overlaps_in_time = mic.start_ms < sys.end_ms + 1500 && sys.start_ms < mic.end_ms + 1500;
-    overlaps_in_time && overlap(&mic.text, &sys.text) >= 0.6
+/// Whether a mic line is the system audio leaking back through the speakers: long enough,
+/// close in time, and repeating the system speech word-for-word in order.
+fn is_echo<'a>(mic: &Segment, recent_sys: impl IntoIterator<Item = &'a Segment>) -> bool {
+    let m = words(&mic.text);
+    if m.len() < ECHO_MIN_WORDS {
+        return false;
+    }
+    let mut near: Vec<&Segment> = recent_sys
+        .into_iter()
+        .filter(|s| mic.start_ms < s.end_ms + ECHO_WINDOW_MS && s.start_ms < mic.end_ms + ECHO_WINDOW_MS)
+        .collect();
+    if near.is_empty() {
+        return false;
+    }
+    // An echo can straddle two system lines: compare against them joined in time order.
+    near.sort_by_key(|s| s.start_ms);
+    let sys: Vec<String> = near.iter().flat_map(|s| words(&s.text)).collect();
+    trigram_coverage(&m, &sys) >= ECHO_MIN_COVERAGE
+}
+
+/// Watchdog tick (about once a second): note capture errors and stalled sources, warn once
+/// per loss and try to restart.
+fn check_captures(r: &Restarter, watch: &mut [SourceWatch; 2], paused: bool, sink: &dyn SessionSink) {
+    let lose = |src: AudioSource, why: String, watch: &mut [SourceWatch; 2]| {
+        let w = &mut watch[src as usize];
+        if w.lost {
+            return;
+        }
+        w.lost = true;
+        w.last_try = None;
+        let what = match src {
+            AudioSource::Mic => "Your microphone stopped sending audio",
+            AudioSource::System => "Audio from the other people on the call stopped",
+        };
+        log::warn!("{} capture lost: {why}", source_name(src));
+        sink.warning(&format!("CAPTURE_LOST:{}: {what} ({why}). Reconnecting…", source_name(src)));
+    };
+    for (src, msg) in r.err_rx.try_iter() {
+        lose(src, msg, watch);
+    }
+    if !paused {
+        for src in [AudioSource::Mic, AudioSource::System] {
+            let stalled = watch[src as usize].last_frame.map(|t| t.elapsed() > CAPTURE_STALL).unwrap_or(false);
+            if stalled {
+                lose(src, format!("no audio for {} s", CAPTURE_STALL.as_secs()), watch);
+            }
+        }
+    }
+    for src in [AudioSource::Mic, AudioSource::System] {
+        let w = &mut watch[src as usize];
+        if !w.lost || w.last_try.map(|t| t.elapsed() < CAPTURE_RETRY).unwrap_or(false) {
+            continue;
+        }
+        w.last_try = Some(Instant::now());
+        match r.restart(src) {
+            // Give the new stream a full stall period to deliver its first frames.
+            Ok(()) => {
+                log::info!("{} capture restarted", source_name(src));
+                w.last_frame = Some(Instant::now());
+            }
+            Err(e) => log::warn!("restarting {} capture failed: {e:#}", source_name(src)),
+        }
+    }
 }
 
 /// Utterances shorter than this can't create a new speaker (see worker_loop).
@@ -322,22 +573,29 @@ fn worker_loop(
     embedder: Option<Arc<Mutex<SpeakerEmbedder>>>,
     mut clusterer: SpeakerClusterer,
     speaker_base: usize,
+    sys_progress: Arc<SysProgress>,
     sink: Arc<dyn SessionSink>,
 ) -> SpeakerClusterer {
-    // Mic segments wait briefly so overlapping system speech can mark them as echo.
+    // Mic segments wait until the system side has caught up past them (or ECHO_MAX_HOLD), so
+    // overlapping system speech can mark them as echo.
     let mut pending_mic: Vec<(Segment, Instant)> = Vec::new();
     let mut recent_sys: std::collections::VecDeque<Segment> = Default::default();
     let mut last_sys_speaker = "s1".to_string();
-    const HOLD: Duration = Duration::from_millis(2500);
 
     let flush = |pending: &mut Vec<(Segment, Instant)>, recent: &std::collections::VecDeque<Segment>, all: bool| {
         let mut keep = Vec::new();
         for (seg, t) in pending.drain(..) {
-            if recent.iter().any(|s| is_echo(&seg, s)) {
-                log::debug!("dropping echoed mic segment: {}", seg.text);
+            if is_echo(&seg, recent) {
+                // Not shown as a line of yours. Logged without the text: meeting content stays out of logs.
+                log::info!(
+                    "mic line at {} ms treated as speaker echo, not shown ({} chars, {} words)",
+                    seg.start_ms,
+                    seg.text.len(),
+                    words(&seg.text).len()
+                );
                 continue;
             }
-            if all || t.elapsed() >= HOLD {
+            if all || t.elapsed() >= ECHO_MAX_HOLD || sys_progress.caught_up(seg.end_ms) {
                 sink.segment(seg);
             } else {
                 keep.push((seg, t));
@@ -401,6 +659,9 @@ fn worker_loop(
                     }
                 }
             }
+            if source == AudioSource::System {
+                sys_progress.inflight.fetch_sub(1, Ordering::SeqCst);
+            }
         }
         flush(&mut pending_mic, &recent_sys, false);
     }
@@ -418,10 +679,80 @@ mod tests {
 
     #[test]
     fn echo_detection() {
-        let sys = seg(AudioSource::System, 1000, 5000, "We should ship the beta on Friday after QA signs off");
-        let echo = seg(AudioSource::Mic, 1200, 5100, "we should ship the beta on friday after qa signs");
-        let real = seg(AudioSource::Mic, 5200, 7000, "Sounds good, I'll tell the design team");
-        assert!(is_echo(&echo, &sys));
-        assert!(!is_echo(&real, &sys));
+        const LONG_REMOTE: &str = "Yeah so I think that's right in principle, but honestly we should ship the beta \
+            on Friday after QA signs off and then see what the numbers look like next week";
+        // (name, system lines, mic line, expected echo)
+        let cases: &[(&str, &[(u64, u64, &str)], (u64, u64, &str), bool)] = &[
+            (
+                "true echo of a long remote line",
+                &[(1000, 5000, "We should ship the beta on Friday after QA signs off")],
+                (1200, 5100, "we should ship the beta on friday after qa signs"),
+                true,
+            ),
+            (
+                "echo with one misheard word",
+                &[(1000, 9000, LONG_REMOTE)],
+                (1300, 9100, "we should ship the beta on friday after qa signs of and then see what the numbers"),
+                true,
+            ),
+            (
+                "echo straddling two system lines",
+                &[(1000, 3000, "We should ship the beta"), (3100, 5000, "on Friday after QA signs off")],
+                (1200, 5100, "we should ship the beta on friday after qa"),
+                true,
+            ),
+            (
+                "short reply next to a long remote line with the same words",
+                &[(1000, 9000, LONG_REMOTE)],
+                (4000, 5500, "yeah that's right"),
+                false,
+            ),
+            (
+                "short reply, review example",
+                &[(1000, 9000, LONG_REMOTE)],
+                (4000, 5500, "Yeah I think that's right"),
+                false,
+            ),
+            (
+                "longer reply reusing remote words out of order",
+                &[(1000, 9000, LONG_REMOTE)],
+                (4000, 6500, "Right, the numbers next week should look like the beta, yeah"),
+                false,
+            ),
+            (
+                "unrelated speech during remote speech",
+                &[(1000, 5000, "We should ship the beta on Friday after QA signs off")],
+                (2000, 4000, "Sorry, can everyone see my screen right now"),
+                false,
+            ),
+            (
+                "same words but far apart in time",
+                &[(1000, 5000, "We should ship the beta on Friday after QA signs off")],
+                (20_000, 24_000, "we should ship the beta on friday after qa signs"),
+                false,
+            ),
+        ];
+        for (name, sys, mic, want) in cases {
+            let sys: Vec<Segment> = sys.iter().map(|(a, b, t)| seg(AudioSource::System, *a, *b, t)).collect();
+            let mic = seg(AudioSource::Mic, mic.0, mic.1, mic.2);
+            assert_eq!(is_echo(&mic, &sys), *want, "{name}");
+        }
+    }
+
+    #[test]
+    fn mic_lines_wait_for_system_side() {
+        let p = SysProgress::default();
+        // No system audio at all: nothing to wait for.
+        assert!(p.caught_up(5000));
+        p.seen.store(true, Ordering::SeqCst);
+        p.pos_ms.store(5500, Ordering::SeqCst);
+        assert!(!p.caught_up(5000), "system audio not yet past the echo window");
+        p.pos_ms.store(7000, Ordering::SeqCst);
+        assert!(p.caught_up(5000));
+        p.active.store(true, Ordering::SeqCst);
+        assert!(!p.caught_up(5000), "remote still talking");
+        p.active.store(false, Ordering::SeqCst);
+        p.inflight.store(1, Ordering::SeqCst);
+        assert!(!p.caught_up(5000), "a system line is still being transcribed");
     }
 }

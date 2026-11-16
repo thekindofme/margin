@@ -77,6 +77,7 @@ fn build_stream<T>(
     device: &cpal::Device,
     cfg: &StreamConfig,
     raw_tx: Sender<Vec<f32>>,
+    errors: Option<super::CaptureErrors>,
 ) -> Result<Stream>
 where
     T: SizedSample + Send + 'static,
@@ -109,14 +110,19 @@ where
                 Err(TrySendError::Disconnected(_)) => {}
             }
         },
-        |e| log::error!("mic stream error: {e}"),
+        move |e| {
+            log::error!("mic stream error: {e}");
+            if let Some(errs) = errors.as_ref() {
+                let _ = errs.try_send((AudioSource::Mic, e.to_string()));
+            }
+        },
         None,
     )?;
     Ok(stream)
 }
 
 /// Build the cpal stream; returns it with the sample rate.
-fn open(device: Option<&str>, raw_tx: Sender<Vec<f32>>) -> Result<(Stream, u32)> {
+fn open(device: Option<&str>, raw_tx: Sender<Vec<f32>>, errors: Option<super::CaptureErrors>) -> Result<(Stream, u32)> {
     let dev = find_device(device)?;
     let name = dev.name().unwrap_or_else(|_| "?".into());
     let supported = dev.default_input_config().context("querying default input config")?;
@@ -125,14 +131,14 @@ fn open(device: Option<&str>, raw_tx: Sender<Vec<f32>>) -> Result<(Stream, u32)>
     let cfg: StreamConfig = supported.into();
     log::info!("mic '{name}': {} ch @ {rate} Hz, {fmt:?}", cfg.channels);
     let stream = match fmt {
-        SampleFormat::F32 => build_stream::<f32>(&dev, &cfg, raw_tx),
-        SampleFormat::I16 => build_stream::<i16>(&dev, &cfg, raw_tx),
-        SampleFormat::I32 => build_stream::<i32>(&dev, &cfg, raw_tx),
-        SampleFormat::I8 => build_stream::<i8>(&dev, &cfg, raw_tx),
-        SampleFormat::U8 => build_stream::<u8>(&dev, &cfg, raw_tx),
-        SampleFormat::U16 => build_stream::<u16>(&dev, &cfg, raw_tx),
-        SampleFormat::U32 => build_stream::<u32>(&dev, &cfg, raw_tx),
-        SampleFormat::F64 => build_stream::<f64>(&dev, &cfg, raw_tx),
+        SampleFormat::F32 => build_stream::<f32>(&dev, &cfg, raw_tx, errors),
+        SampleFormat::I16 => build_stream::<i16>(&dev, &cfg, raw_tx, errors),
+        SampleFormat::I32 => build_stream::<i32>(&dev, &cfg, raw_tx, errors),
+        SampleFormat::I8 => build_stream::<i8>(&dev, &cfg, raw_tx, errors),
+        SampleFormat::U8 => build_stream::<u8>(&dev, &cfg, raw_tx, errors),
+        SampleFormat::U16 => build_stream::<u16>(&dev, &cfg, raw_tx, errors),
+        SampleFormat::U32 => build_stream::<u32>(&dev, &cfg, raw_tx, errors),
+        SampleFormat::F64 => build_stream::<f64>(&dev, &cfg, raw_tx, errors),
         other => Err(anyhow!("unsupported mic sample format {other:?}")),
     }
     .context("building input stream")?;
@@ -140,7 +146,11 @@ fn open(device: Option<&str>, raw_tx: Sender<Vec<f32>>) -> Result<(Stream, u32)>
     Ok((stream, rate))
 }
 
-pub fn start_mic(device: Option<String>, tx: Sender<AudioFrame>) -> Result<CaptureHandle> {
+pub fn start_mic(
+    device: Option<String>,
+    tx: Sender<AudioFrame>,
+    errors: Option<super::CaptureErrors>,
+) -> Result<CaptureHandle> {
     let (raw_tx, raw_rx) = bounded::<Vec<f32>>(256);
     let (stop_tx, stop_rx) = bounded::<()>(1);
     let (ready_tx, ready_rx) = bounded::<Result<u32, String>>(1);
@@ -148,7 +158,7 @@ pub fn start_mic(device: Option<String>, tx: Sender<AudioFrame>) -> Result<Captu
     // Stream thread: owns the !Send cpal stream until told to stop.
     let stream_thread: JoinHandle<()> = std::thread::Builder::new()
         .name("margin-mic-stream".into())
-        .spawn(move || match open(device.as_deref(), raw_tx) {
+        .spawn(move || match open(device.as_deref(), raw_tx, errors) {
             Ok((stream, rate)) => {
                 let _ = ready_tx.send(Ok(rate));
                 // Blocks until stop (or the handle is dropped without sending).

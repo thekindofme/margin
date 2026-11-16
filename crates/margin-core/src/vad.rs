@@ -98,6 +98,11 @@ impl Vad {
         out
     }
 
+    /// True while an utterance is open (speech, or its hangover, not yet emitted).
+    pub fn in_speech(&self) -> bool {
+        self.current.is_some()
+    }
+
     /// Flush whatever is in progress (end of recording).
     pub fn flush(&mut self) -> Option<Utterance> {
         let rest = std::mem::take(&mut self.pending);

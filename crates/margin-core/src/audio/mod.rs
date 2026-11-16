@@ -1,7 +1,7 @@
 //! Audio capture. OWNER: audio worker.
 //! Mic via cpal, system audio (everyone else on the call) via ScreenCaptureKit on macOS.
 //! Every frame sent downstream is 16 kHz mono f32 (see `crate::SAMPLE_RATE`).
-use crate::types::AudioFrame;
+use crate::types::{AudioFrame, AudioSource};
 use anyhow::Result;
 
 mod mic;
@@ -98,20 +98,37 @@ pub fn probe_inputs(ms: u64) -> Vec<MicProbe> {
         .collect()
 }
 
+/// Where a running capture reports that it failed (device unplugged, stream stopped by the OS).
+pub type CaptureErrors = Sender<(AudioSource, String)>;
+
 /// Start capturing the microphone. `device` = None uses the system default input.
 pub fn start_mic(device: Option<String>, tx: Sender<AudioFrame>) -> Result<CaptureHandle> {
-    mic::start_mic(device, tx)
+    mic::start_mic(device, tx, None)
+}
+
+/// Like `start_mic`, reporting stream errors (e.g. the device went away) to `errors`.
+pub fn start_mic_watched(device: Option<String>, tx: Sender<AudioFrame>, errors: CaptureErrors) -> Result<CaptureHandle> {
+    mic::start_mic(device, tx, Some(errors))
 }
 
 /// Start capturing system output audio (other meeting participants). macOS only.
 pub fn start_system(tx: Sender<AudioFrame>) -> Result<CaptureHandle> {
+    start_system_inner(tx, None)
+}
+
+/// Like `start_system`, reporting an unexpected stream stop to `errors`.
+pub fn start_system_watched(tx: Sender<AudioFrame>, errors: CaptureErrors) -> Result<CaptureHandle> {
+    start_system_inner(tx, Some(errors))
+}
+
+fn start_system_inner(tx: Sender<AudioFrame>, errors: Option<CaptureErrors>) -> Result<CaptureHandle> {
     #[cfg(target_os = "macos")]
     {
-        system::start(tx)
+        system::start(tx, errors)
     }
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = tx;
+        let _ = (tx, errors);
         Err(anyhow::anyhow!("system audio capture is only supported on macOS"))
     }
 }

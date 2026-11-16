@@ -112,7 +112,7 @@ impl SCStreamOutputTrait for Handler {
     }
 }
 
-pub fn start(tx: Sender<AudioFrame>) -> Result<CaptureHandle> {
+pub fn start(tx: Sender<AudioFrame>, errors: Option<super::CaptureErrors>) -> Result<CaptureHandle> {
     if !permitted() {
         return Err(anyhow!(
             "Screen Recording permission not granted (needed to capture system audio)"
@@ -140,7 +140,19 @@ pub fn start(tx: Sender<AudioFrame>) -> Result<CaptureHandle> {
         .with_channel_count(REQUESTED_CHANNELS as i32)
         .with_excludes_current_process_audio(true);
 
-    let mut stream = SCStream::new(&filter, &config).map_err(|e| anyhow!("SCStream: {e}"))?;
+    // The delegate is the only way ScreenCaptureKit reports a stream it stopped on its own.
+    let mut stream = match errors {
+        Some(errs) => SCStream::new_with_delegate(
+            &filter,
+            &config,
+            ErrorHandler::new(move |e| {
+                log::error!("system audio stream stopped: {e}");
+                let _ = errs.try_send((AudioSource::System, e.to_string()));
+            }),
+        ),
+        None => SCStream::new(&filter, &config),
+    }
+    .map_err(|e| anyhow!("SCStream: {e}"))?;
     stream
         .add_output_handler(
             Handler { tx, state: Mutex::new(State::default()) },
