@@ -61,10 +61,16 @@ pub struct MeetingSummary {
     pub folders: Vec<String>,
 }
 
+/// Folder colours, in the order new folders take them.
+pub const FOLDER_COLORS: [&str; 8] = ["ember", "sage", "blue", "amber", "violet", "teal", "rose", "slate"];
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Folder {
     pub id: String,
     pub name: String,
+    /// One of [`FOLDER_COLORS`].
+    #[serde(default)]
+    pub color: String,
     /// Notes in the folder.
     #[serde(default)]
     pub count: usize,
@@ -128,7 +134,7 @@ CREATE TABLE IF NOT EXISTS chats (
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS event_flags (event_id TEXT PRIMARY KEY, flag TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS folders (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS folders (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL, color TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS meeting_folders (
   meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
   folder_id TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
@@ -175,6 +181,11 @@ impl Store {
             if !has {
                 conn.execute_batch(ddl)?;
             }
+        }
+        // Folder colours arrived after folders.
+        let has_color: bool = conn.prepare("SELECT 1 FROM pragma_table_info('folders') WHERE name='color'")?.exists([])?;
+        if !has_color {
+            conn.execute_batch("ALTER TABLE folders ADD COLUMN color TEXT NOT NULL DEFAULT ''")?;
         }
         // Older builds stored speaker voice prints; never keep biometric data on disk.
         conn.execute("UPDATE meetings SET clusterer=NULL WHERE clusterer IS NOT NULL", [])?;
@@ -477,18 +488,37 @@ impl Store {
         Ok(())
     }
 
+    /// Delete notes that never got anything in them: drafts with no notes, transcript, AI notes,
+    /// chat or folder (opening an upcoming event creates one; reopening the event recreates it).
+    /// A note the user titled by hand counts as kept. `keep` is the note on screen.
+    pub fn purge_empty_drafts(&self, keep: Option<&str>) -> Result<usize> {
+        let n = self.conn.lock().execute(
+            "DELETE FROM meetings WHERE status='draft' AND duration_ms=0
+               AND trim(notes)='' AND enhanced=''
+               AND (event_id IS NOT NULL OR trim(title)='')
+               AND id <> COALESCE(?1, '')
+               AND NOT EXISTS (SELECT 1 FROM segments s WHERE s.meeting_id=meetings.id)
+               AND NOT EXISTS (SELECT 1 FROM chats c WHERE c.meeting_id=meetings.id)
+               AND NOT EXISTS (SELECT 1 FROM meeting_folders f WHERE f.meeting_id=meetings.id)",
+            params![keep],
+        )?;
+        Ok(n)
+    }
+
     // ---------------------------------------------------------------- folders
 
     /// All folders, alphabetical, with note counts. Empty on a database without folders.
     pub fn list_folders(&self) -> Result<Vec<Folder>> {
         let c = self.conn.lock();
         let Ok(mut st) = c.prepare(
-            "SELECT f.id, f.name, (SELECT COUNT(*) FROM meeting_folders mf WHERE mf.folder_id=f.id)
+            "SELECT f.id, f.name, (SELECT COUNT(*) FROM meeting_folders mf WHERE mf.folder_id=f.id), f.color
              FROM folders f ORDER BY f.name COLLATE NOCASE",
         ) else {
             return Ok(vec![]);
         };
-        let rows = st.query_map([], |r| Ok(Folder { id: r.get(0)?, name: r.get(1)?, count: r.get::<_, i64>(2)? as usize }))?;
+        let rows = st.query_map([], |r| {
+            Ok(Folder { id: r.get(0)?, name: r.get(1)?, count: r.get::<_, i64>(2)? as usize, color: r.get::<_, String>(3).unwrap_or_default() })
+        })?;
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
 
@@ -500,10 +530,17 @@ impl Store {
         if let Some(f) = self.list_folders()?.into_iter().find(|f| f.name.eq_ignore_ascii_case(name)) {
             return Ok(f);
         }
-        let f = Folder { id: uuid::Uuid::new_v4().to_string(), name: name.to_string(), count: 0 };
+        // The first colour no folder uses yet (cycling once all are taken).
+        let used: Vec<String> = self.list_folders()?.into_iter().map(|f| f.color).collect();
+        let color = FOLDER_COLORS
+            .iter()
+            .find(|c| !used.iter().any(|u| u == *c))
+            .unwrap_or(&FOLDER_COLORS[used.len() % FOLDER_COLORS.len()])
+            .to_string();
+        let f = Folder { id: uuid::Uuid::new_v4().to_string(), name: name.to_string(), count: 0, color };
         self.conn.lock().execute(
-            "INSERT INTO folders (id,name,created_at) VALUES (?1,?2,?3)",
-            params![f.id, f.name, Utc::now().to_rfc3339()],
+            "INSERT INTO folders (id,name,created_at,color) VALUES (?1,?2,?3,?4)",
+            params![f.id, f.name, Utc::now().to_rfc3339(), f.color],
         )?;
         Ok(f)
     }
@@ -519,6 +556,12 @@ impl Store {
         Ok(())
     }
 
+    pub fn set_folder_color(&self, id: &str, color: &str) -> Result<()> {
+        anyhow::ensure!(FOLDER_COLORS.contains(&color), "unknown colour {color}");
+        self.conn.lock().execute("UPDATE folders SET color=?2 WHERE id=?1", params![id, color])?;
+        Ok(())
+    }
+
     /// Delete a folder. Its notes are kept; they just leave the folder.
     pub fn delete_folder(&self, id: &str) -> Result<()> {
         self.conn.lock().execute("DELETE FROM folders WHERE id=?1", [id])?;
@@ -529,12 +572,12 @@ impl Store {
     pub fn folders_of(&self, meeting_id: &str) -> Result<Vec<Folder>> {
         let c = self.conn.lock();
         let Ok(mut st) = c.prepare(
-            "SELECT f.id, f.name FROM folders f JOIN meeting_folders mf ON mf.folder_id=f.id
+            "SELECT f.id, f.name, f.color FROM folders f JOIN meeting_folders mf ON mf.folder_id=f.id
              WHERE mf.meeting_id=?1 ORDER BY f.name COLLATE NOCASE",
         ) else {
             return Ok(vec![]);
         };
-        let rows = st.query_map([meeting_id], |r| Ok(Folder { id: r.get(0)?, name: r.get(1)?, count: 0 }))?;
+        let rows = st.query_map([meeting_id], |r| Ok(Folder { id: r.get(0)?, name: r.get(1)?, count: 0, color: r.get::<_, String>(2).unwrap_or_default() }))?;
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
 
@@ -628,6 +671,9 @@ mod tests {
         assert_eq!(s.list_meetings(None, 10).unwrap()[0].folders, vec![f.id.clone()]);
         assert_eq!(s.filed_notes().unwrap()[0].1.title, "Acme kickoff");
         let g = s.create_folder("Hiring").unwrap();
+        assert_ne!(f.color, g.color, "new folders take different colours");
+        s.set_folder_color(&g.id, "teal").unwrap();
+        assert!(s.set_folder_color(&g.id, "neon").is_err());
         assert!(s.rename_folder(&g.id, "ACME").is_err(), "no duplicate names");
         s.set_series_folder("acme kickoff", &f.id, true).unwrap();
         assert_eq!(s.series_folders("acme kickoff").unwrap(), vec![f.id.clone()]);
@@ -637,6 +683,25 @@ mod tests {
         assert!(s.folders_of("m1").unwrap().is_empty());
         assert!(s.get_meeting("m1").unwrap().is_some(), "deleting a folder keeps its notes");
         assert!(s.series_folders("acme kickoff").unwrap().is_empty());
+    }
+
+    #[test]
+    fn purges_only_empty_drafts() {
+        let dir = std::env::temp_dir().join(format!("margin-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let s = Store::open(&dir.join("t.sqlite")).unwrap();
+        let mk = |id: &str, title: &str, ev: bool| Meeting {
+            id: id.into(), title: title.into(), created_at: Utc::now(), template: "auto".into(), status: "draft".into(),
+            event_id: ev.then(|| format!("ev-{id}")), ..Default::default()
+        };
+        for m in [mk("empty-ev", "Yoga", true), mk("empty", "", false), mk("titled", "Ideas", false), mk("noted", "", false), mk("open", "", false)] {
+            s.create_meeting(&m).unwrap();
+        }
+        s.set_field("noted", "notes", "buy milk").unwrap();
+        assert_eq!(s.purge_empty_drafts(Some("open")).unwrap(), 2);
+        let left: Vec<String> = s.list_meetings(None, 10).unwrap().into_iter().map(|m| m.id).collect();
+        assert!(left.contains(&"titled".to_string()) && left.contains(&"noted".to_string()) && left.contains(&"open".to_string()));
+        assert!(!left.contains(&"empty-ev".to_string()) && !left.contains(&"empty".to_string()));
     }
 
     #[test]

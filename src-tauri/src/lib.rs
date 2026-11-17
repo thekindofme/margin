@@ -16,6 +16,11 @@ pub fn run() {
     transcribe_rs_accel();
 
     let store = Arc::new(margin_core::store::Store::open_default().expect("open database"));
+    // Notes opened from an upcoming event but never used don't pile up in the list.
+    match store.purge_empty_drafts(None) {
+        Ok(n) if n > 0 => eprintln!("removed {n} empty draft notes"),
+        _ => {}
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| tray::show_main(app)))
         .plugin(tauri_plugin_notification::init())
@@ -80,9 +85,11 @@ pub fn run() {
             commands::list_meetings,
             commands::get_meeting,
             commands::list_folders,
+            commands::discard_if_empty,
             commands::create_folder,
             commands::rename_folder,
             commands::delete_folder,
+            commands::set_folder_color,
             commands::set_meeting_folder,
             commands::set_folder_series,
             commands::dismiss_folder_suggestion,

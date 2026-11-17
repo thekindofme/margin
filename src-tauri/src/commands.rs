@@ -453,6 +453,12 @@ pub fn get_meeting(state: State<AppState>, id: String) -> R<MeetingDetail> {
     })
 }
 
+/// Leaving a note: if nothing was ever put in it, don't keep it.
+#[tauri::command]
+pub fn discard_if_empty(state: State<AppState>, keep: Option<String>) -> R<usize> {
+    state.store.purge_empty_drafts(keep.as_deref()).map_err(e)
+}
+
 // ------------------------------------------------------------------ folders
 
 #[tauri::command]
@@ -477,6 +483,11 @@ pub fn rename_folder(state: State<AppState>, id: String, name: String) -> R<()> 
     state.store.rename_folder(&id, &name).map_err(e)?;
     recorder::folders_changed();
     Ok(())
+}
+
+#[tauri::command]
+pub fn set_folder_color(state: State<AppState>, id: String, color: String) -> R<()> {
+    state.store.set_folder_color(&id, &color).map_err(e)
 }
 
 #[tauri::command]

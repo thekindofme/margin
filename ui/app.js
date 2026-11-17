@@ -152,7 +152,21 @@ async function loadEvents() {
   renderSidebar();
   if (S.view === "home") render();
 }
+// Leaving a note that never got anything in it removes it (e.g. an upcoming event you peeked at).
+async function leaveNote(nextId) {
+  const prev = S.view === "note" ? S.meetingId : null;
+  if (!prev || prev === nextId) return;
+  const n = await invoke("discard_if_empty", { keep: nextId || null }).catch(() => 0);
+  if (n) await loadMeetings();
+}
+async function goHome() {
+  closeFolderPicker();
+  await leaveNote(null);
+  S.view = "home"; S.meetingId = null; S.detail = null;
+  render(); renderSidebar();
+}
 async function openMeeting(id, tab) {
+  await leaveNote(id);
   S.meetingId = id;
   S.view = "note";
   if (tab) S.tab = tab;
@@ -178,19 +192,24 @@ function renderSidebar() {
   const now = Date.now();
   const upcoming = S.events
     .filter((x) => new Date(x.event.end) > now && (x.real || !S.settings?.only_real_meetings))
-    .slice(0, 4);
+    .slice(0, 2);
   let h = "";
+  // Two quiet blocks above the notes (next meetings, folders), each one line per row; the
+  // full schedule lives on Home.
   if (upcoming.length && !S.query) {
-    h += `<div class="group-label">Coming up</div>`;
+    h += `<section class="side-sec"><div class="group-label">Coming up</div>`;
     for (const x of upcoming) {
       const e = x.event, live = new Date(e.start) <= now;
-      h += `<button class="item event-item" data-event="${esc(e.id)}">
+      const today = new Date(e.start).toDateString() === new Date().toDateString();
+      h += `<button class="item event-item" data-event="${esc(e.id)}" title="${esc(e.title || "")}${e.attendees.length ? ` · ${e.attendees.length} people` : ""}">
         <span class="t">${esc(e.title || "Untitled event")}</span>
-        <span class="s"><span class="when">${live ? "Now" : `${eventDay(e.start)} ${fmtTime(e.start)}`}</span>${e.attendees.length ? ` · ${e.attendees.length} people` : ""}</span>
+        <span class="when">${live ? "Now" : today ? fmtTime(e.start) : `${new Date(e.start).toLocaleDateString([], { weekday: "short" })} ${fmtTime(e.start)}`}</span>
       </button>`;
     }
+    h += `</section>`;
   }
   h += foldersSidebarHtml();
+  if (h) h += `<div class="side-rule"></div>`;
   let last = null;
   const list = S.folder ? S.meetings.filter((m) => (m.folders || []).includes(S.folder)) : S.meetings;
   if (!list.length && S.query) h += `<div class="group-label">No matches</div>`;
@@ -212,6 +231,13 @@ function renderSidebar() {
 // Folders: a quiet list that appears once the first folder exists. Click to filter the notes
 // below; drag a note onto a folder to file it.
 const FOLDERS_SHOWN = 5;
+const FOLDER_COLORS = ["ember", "sage", "blue", "amber", "violet", "teal", "rose", "slate"];
+function folderColor(f) {
+  if (f.color) return f.color;
+  let h = 0;
+  for (const c of f.id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return FOLDER_COLORS[h % FOLDER_COLORS.length];
+}
 function foldersSidebarHtml() {
   if (!S.folders.length || S.query) return "";
   let shown = S.folders;
@@ -220,16 +246,16 @@ function foldersSidebarHtml() {
     const act = S.folders.find((f) => f.id === S.folder);
     if (act && !shown.includes(act)) shown.push(act);
   }
-  let h = `<div class="group-label">Folders</div>`;
+  let h = `<section class="side-sec"><div class="group-label">Folders</div>`;
   for (const f of shown) {
     const on = S.folder === f.id;
-    h += `<div class="item folder-item ${on ? "active" : ""}" data-folder="${esc(f.id)}" role="button" tabindex="0">
+    h += `<div class="item folder-item fc-${folderColor(f)} ${on ? "active" : ""}" data-folder="${esc(f.id)}" role="button" tabindex="0">
       ${ICON.folder}<span class="t">${esc(f.name)}</span>
       ${on ? `<button class="icon-btn folder-more" data-folder-menu="${esc(f.id)}" title="Rename or delete">${ICON.dots}</button>` : `<span class="n">${f.count || ""}</span>`}
     </div>`;
   }
   if (shown.length < S.folders.length) h += `<button class="link folder-all" data-folders-all>Show all ${S.folders.length}</button>`;
-  return h;
+  return h + `</section>`;
 }
 
 function closeFolderMenu() { $("#folderMenu")?.remove(); document.removeEventListener("mousedown", folderMenuOutside, true); }
@@ -244,7 +270,13 @@ function openFolderMenu(id, anchor) {
   const r = anchor.getBoundingClientRect();
   pop.style.left = `${r.right - 160}px`;
   pop.style.top = `${r.bottom + 4}px`;
-  pop.innerHTML = `<button data-act="rename">Rename</button><button data-act="delete" class="danger">Delete folder</button>`;
+  pop.innerHTML = `<div class="swatches">${FOLDER_COLORS.map((c) => `<button class="sw fc-${c} ${folderColor(f) === c ? "on" : ""}" data-color="${c}" title="${c}" aria-label="${c}"></button>`).join("")}</div>
+    <button data-act="rename">Rename</button><button data-act="delete" class="danger">Delete folder</button>`;
+  pop.querySelectorAll("[data-color]").forEach((b) => (b.onclick = async () => {
+    await invoke("set_folder_color", { id: f.id, color: b.dataset.color }).catch(fail);
+    closeFolderMenu();
+    await afterFolderChange();
+  }));
   document.body.appendChild(pop);
   pop.querySelector('[data-act="rename"]').onclick = () => { closeFolderMenu(); renameFolder(f); };
   pop.querySelector('[data-act="delete"]').onclick = () => { closeFolderMenu(); deleteFolder(f); };
@@ -426,6 +458,7 @@ function renderBanner(force) {
 // ------------------------------------------------------------------ views
 function render(soft) {
   renderBanner();
+  $("#homeBtn").hidden = S.view === "home" || S.view === "onboarding";
   const v = $("#view");
   if (S.view === "onboarding") return renderOnboarding(v);
   if (S.view === "settings") return renderSettings(v);
@@ -671,7 +704,6 @@ function renderNote(v, soft) {
       ${att.slice(0, 5).map((a, i) => `<span class="chip" title="${esc(a.email || "")}"><span class="av" style="background:${SP_COLORS[i % 6]}">${esc(initials(a.name))}</span>${esc(a.name)}</span>`).join("")}
       ${att.length > 5 ? `<span class="chip">+${att.length - 5}</span>` : ""}
       ${m.meeting_url ? `<a class="chip" href="#" id="joinLink">${ICON.link}Join call</a>` : ""}
-      <select class="chip" id="tplSelect" title="Note template">${tplOpts}</select>
     </div></div>
     <div class="tabs">
       <button class="tab ${S.tab === "notes" ? "on" : ""}" data-tab="notes">Notes</button>
@@ -695,7 +727,8 @@ function renderNote(v, soft) {
           <button class="btn small" id="aiEdit">Edit</button>
           <button class="btn small" id="toggleMine">My notes</button>
           <button class="btn small" id="regen">${ICON.spark} Regenerate</button>
-          <button class="btn small" id="copyMd">${ICON.copy} Copy</button>`}
+          <button class="btn small" id="copyMd">${ICON.copy} Copy</button>
+          ${formatHtml(tplOpts)}`}
         </div>
         ${m.notes.trim() ? `<div class="yours"><b style="color:var(--ink)">Your notes</b>\n${esc(m.notes.trim())}</div>` : ""}`;
     } else {
@@ -703,7 +736,7 @@ function renderNote(v, soft) {
       h += (noProvider ? choosePromptHtml() : "") + `<div class="sheet"><textarea id="notesEditor" class="editor" spellcheck="true" placeholder="${isRec ? "Jot down what matters — Margin listens and fills in the rest…" : "Write notes here. Start recording and Margin will turn them into full notes."}">${esc(m.notes)}</textarea></div>
         <div class="note-actions">
           ${m.enhanced ? `<button class="btn small" id="toggleMine">Show AI notes</button>` : ""}
-          ${!isRec && (d.segments.length || m.notes.trim()) ? `<button class="btn small ${m.enhanced ? "" : "primary"}" id="regen">${ICON.spark} ${m.enhanced ? "Regenerate" : "Write AI notes"}</button>` : ""}
+          ${!isRec && (d.segments.length || m.notes.trim()) ? `<button class="btn small ${m.enhanced ? "" : "primary"}" id="regen">${ICON.spark} ${m.enhanced ? "Regenerate" : "Write AI notes"}</button>${formatHtml(tplOpts)}` : ""}
         </div>`;
     }
   } else if (S.tab === "transcript") {
@@ -726,7 +759,7 @@ function renderNote(v, soft) {
 // suggested folder in its place (one click to accept, × to dismiss for this note).
 function folderChipsHtml(d) {
   const fs = d.folders || [];
-  if (fs.length) return fs.map((f) => `<button class="chip folder-chip" data-folder-pick title="Change folders">${ICON.folder}${esc(f.name)}</button>`).join("");
+  if (fs.length) return fs.map((f) => `<button class="chip folder-chip fc-${folderColor(f)}" data-folder-pick title="Change folders">${ICON.folder}${esc(f.name)}</button>`).join("");
   if (d.folder_suggestion) {
     return `<span class="chip folder-chip sug" title="Suggested from your other notes">${ICON.folder}<button data-sug-add>Add to ${esc(d.folder_suggestion.name)}</button><button class="x" data-sug-no title="Not this folder" aria-label="Dismiss suggestion">×</button></span>`;
   }
@@ -753,7 +786,7 @@ function paintFolderPicker() {
   const d = S.detail, m = d.meeting;
   const inIds = (d.folders || []).map((f) => f.id);
   const auto = inIds.length > 0 && inIds.every((id) => (d.series_folders || []).includes(id));
-  pop.innerHTML = `${S.folders.map((f) => `<button class="pick ${inIds.includes(f.id) ? "on" : ""}" data-fid="${esc(f.id)}"><span class="box">${ICON.check}</span>${esc(f.name)}</button>`).join("")}
+  pop.innerHTML = `${S.folders.map((f) => `<button class="pick fc-${folderColor(f)} ${inIds.includes(f.id) ? "on" : ""}" data-fid="${esc(f.id)}"><span class="box">${ICON.check}</span>${esc(f.name)}</button>`).join("")}
     <form class="new-folder"><input class="field" name="n" placeholder="${S.folders.length ? "New folder…" : "Name your first folder"}" maxlength="60" spellcheck="false" /></form>
     ${d.has_series && inIds.length ? `<label class="auto-add"><input type="checkbox" ${auto ? "checked" : ""} /> Auto-add future “${esc(m.title)}” meetings</label>` : ""}`;
   pop.querySelectorAll("[data-fid]").forEach((b) => (b.onclick = async () => {
@@ -778,13 +811,19 @@ function paintFolderPicker() {
   if (!S.folders.length) pop.querySelector(".new-folder input").focus();
 }
 
+// The AI notes' layout (Auto, 1:1, Stand-up…): only matters when AI notes get written, so it
+// sits beside those buttons, labelled, instead of in the note's header.
+function formatHtml(opts) {
+  return `<label class="fmt" title="How the AI lays out the notes. Auto picks from the meeting.">Format <select id="tplSelect">${opts}</select></label>`;
+}
+
 // Who wrote what: the AI notes carry their provenance at the top.
 function provenanceHtml(m) {
   const tpl = (S.templates.find((t) => t.id === m.template) || {}).name || (m.template === "auto" ? "Auto" : m.template);
   const by = m.enhanced_by ? `<b>${esc(m.enhanced_by)}</b>` : "an AI model";
   const stt = m.stt_model ? ` Transcribed on this Mac by ${m.stt_model}.` : "";
   return `<div class="src-strip" title="AI notes can contain mistakes. Check them against the transcript.${esc(stt)}">${ICON.spark}
-    <span>Written by ${by} from your notes and the transcript · ${esc(tpl)}${m.enhanced_edited ? ` · <span class="edited">edited by you</span>` : ""}</span></div>`;
+    <span>Written by ${by} from your notes and the transcript${tpl === "Auto" ? "" : ` · ${esc(tpl)} format`}${m.enhanced_edited ? ` · <span class="edited">edited by you</span>` : ""}</span></div>`;
 }
 
 function regenConfirmHtml() {
@@ -922,7 +961,8 @@ function bindNote(v) {
     saveTimer = setTimeout(() => invoke("update_meeting", { id: m.id, field: "notes", value: ed.value }).catch(fail), 350);
   };
   v.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { S.tab = b.dataset.tab; render(); if (S.tab === "ask") setTimeout(() => $("#askInput")?.focus(), 0); }));
-  $("#tplSelect").onchange = (e) => { m.template = e.target.value; invoke("update_meeting", { id: m.id, field: "template", value: e.target.value }); };
+  const tsel = $("#tplSelect");
+  if (tsel) tsel.onchange = (e) => { m.template = e.target.value; invoke("update_meeting", { id: m.id, field: "template", value: e.target.value }); };
   const tm = $("#toggleMine");
   if (tm) tm.onclick = () => { S.showMine = !S.showMine; render(); };
   const rg = $("#regen");
@@ -1656,17 +1696,20 @@ $("#newNote").onclick = async () => {
   } catch (e) { fail(e); }
 };
 $("#openSettings").onclick = async () => {
-  S.view = "settings"; render();
+  await leaveNote(null);
+  S.view = "settings"; render(); renderSidebar();
   S.perms = await invoke("permissions");
   await Promise.all([loadModels(), S.providers ? null : loadProviders(false)]);
   if (S.view === "settings") render();
 };
 $("#search").oninput = (e) => { S.query = e.target.value; clearTimeout(e.target._t); e.target._t = setTimeout(loadMeetings, 150); };
-document.querySelector(".brand").onclick = () => { S.view = "home"; S.meetingId = null; render(); renderSidebar(); };
+document.querySelector(".brand").onclick = goHome;
+$("#homeBtn").onclick = goHome;
 document.addEventListener("keydown", (e) => {
   if (e.metaKey && e.key === "n") { e.preventDefault(); $("#newNote").click(); }
   if (e.metaKey && e.key === ",") { e.preventDefault(); $("#openSettings").click(); }
   if (e.metaKey && e.key === "k") { e.preventDefault(); $("#search").focus(); }
+  if (e.metaKey && (e.key === "[" || (e.shiftKey && e.key.toLowerCase() === "h"))) { e.preventDefault(); goHome(); }
 });
 
 // ------------------------------------------------------------------ live events
