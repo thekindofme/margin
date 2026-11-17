@@ -25,6 +25,7 @@ const ICON = {
   copy: '<svg viewBox="0 0 16 16"><rect x="5" y="5" width="8.5" height="8.5" rx="1.5"/><path d="M3 10.5V3.8C3 3.3 3.3 3 3.8 3h6.7"/></svg>',
   people: '<svg viewBox="0 0 16 16"><circle cx="6" cy="5.5" r="2.3"/><path d="M2 13c.4-2.4 2-3.6 4-3.6s3.6 1.2 4 3.6M11 3.5a2.2 2.2 0 0 1 0 4.2M12.2 9.6c1.1.4 1.9 1.6 2 3.4"/></svg>',
   cal: '<svg viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3"/></svg>',
+  folder: '<svg viewBox="0 0 16 16"><path d="M2 4.5c0-.6.4-1 1-1h3.2l1.5 1.6H13c.6 0 1 .4 1 1v6.4c0 .6-.4 1-1 1H3c-.6 0-1-.4-1-1z"/></svg>',
   link: '<svg viewBox="0 0 16 16"><path d="M6.8 9.2a2.8 2.8 0 0 0 4 0l2-2a2.8 2.8 0 0 0-4-4l-.8.8M9.2 6.8a2.8 2.8 0 0 0-4 0l-2 2a2.8 2.8 0 0 0 4 4l.8-.8"/></svg>',
 };
 
@@ -41,6 +42,9 @@ const S = {
   tab: "notes", // notes | transcript | ask
   showMine: false,
   query: "",
+  folders: [], // [{id, name, count}]
+  folder: null, // folder id the sidebar is filtered to
+  allFolders: false, // show every folder, not just the first few
   models: null,
   progress: {},
   providers: null,
@@ -138,6 +142,11 @@ async function loadMeetings() {
   S.meetings = await invoke("list_meetings", { query: S.query || null });
   renderSidebar();
 }
+async function loadFolders() {
+  S.folders = await invoke("list_folders").catch(() => []);
+  if (S.folder && !S.folders.some((f) => f.id === S.folder)) S.folder = null;
+  renderSidebar();
+}
 async function loadEvents() {
   S.events = await invoke("upcoming_events");
   renderSidebar();
@@ -181,14 +190,17 @@ function renderSidebar() {
       </button>`;
     }
   }
+  h += foldersSidebarHtml();
   let last = null;
-  if (!S.meetings.length && S.query) h += `<div class="group-label">No matches</div>`;
-  for (const m of S.meetings) {
+  const list = S.folder ? S.meetings.filter((m) => (m.folders || []).includes(S.folder)) : S.meetings;
+  if (!list.length && S.query) h += `<div class="group-label">No matches</div>`;
+  else if (!list.length && S.folder) h += `<p class="folder-empty">Nothing here yet. Drag notes in, or use <b>Add to folder</b> on a note.</p>`;
+  for (const m of list) {
     const d = dayLabel(m.created_at);
     if (d !== last) { h += `<div class="group-label">${esc(d)}</div>`; last = d; }
     const rec = S.rec.recording && S.rec.meeting_id === m.id;
     const who = m.attendees.filter((a) => !a.is_self).map((a) => a.name.split(" ")[0]).slice(0, 3).join(", ");
-    h += `<button class="item ${S.meetingId === m.id && S.view === "note" ? "active" : ""}" data-meeting="${esc(m.id)}">
+    h += `<button class="item ${S.meetingId === m.id && S.view === "note" ? "active" : ""}" data-meeting="${esc(m.id)}" draggable="true">
       <span class="t">${esc(m.title || "Untitled")}</span>
       <span class="s">${fmtTime(m.created_at)}${m.duration_ms ? ` · ${fmtDur(m.duration_ms)}` : ""}${who ? ` · ${esc(who)}` : ""}</span>
       ${rec ? '<span class="rec-dot"></span>' : ""}
@@ -197,7 +209,99 @@ function renderSidebar() {
   el.innerHTML = h;
 }
 
+// Folders: a quiet list that appears once the first folder exists. Click to filter the notes
+// below; drag a note onto a folder to file it.
+const FOLDERS_SHOWN = 5;
+function foldersSidebarHtml() {
+  if (!S.folders.length || S.query) return "";
+  let shown = S.folders;
+  if (!S.allFolders && shown.length > FOLDERS_SHOWN + 1) {
+    shown = shown.slice(0, FOLDERS_SHOWN);
+    const act = S.folders.find((f) => f.id === S.folder);
+    if (act && !shown.includes(act)) shown.push(act);
+  }
+  let h = `<div class="group-label">Folders</div>`;
+  for (const f of shown) {
+    const on = S.folder === f.id;
+    h += `<div class="item folder-item ${on ? "active" : ""}" data-folder="${esc(f.id)}" role="button" tabindex="0">
+      ${ICON.folder}<span class="t">${esc(f.name)}</span>
+      ${on ? `<button class="icon-btn folder-more" data-folder-menu="${esc(f.id)}" title="Rename or delete">${ICON.dots}</button>` : `<span class="n">${f.count || ""}</span>`}
+    </div>`;
+  }
+  if (shown.length < S.folders.length) h += `<button class="link folder-all" data-folders-all>Show all ${S.folders.length}</button>`;
+  return h;
+}
+
+function closeFolderMenu() { $("#folderMenu")?.remove(); document.removeEventListener("mousedown", folderMenuOutside, true); }
+function folderMenuOutside(e) { if (!e.target.closest("#folderMenu")) closeFolderMenu(); }
+function openFolderMenu(id, anchor) {
+  closeFolderMenu();
+  const f = S.folders.find((x) => x.id === id);
+  if (!f) return;
+  const pop = document.createElement("div");
+  pop.id = "folderMenu";
+  pop.className = "menu-pop";
+  const r = anchor.getBoundingClientRect();
+  pop.style.left = `${r.right - 160}px`;
+  pop.style.top = `${r.bottom + 4}px`;
+  pop.innerHTML = `<button data-act="rename">Rename</button><button data-act="delete" class="danger">Delete folder</button>`;
+  document.body.appendChild(pop);
+  pop.querySelector('[data-act="rename"]').onclick = () => { closeFolderMenu(); renameFolder(f); };
+  pop.querySelector('[data-act="delete"]').onclick = () => { closeFolderMenu(); deleteFolder(f); };
+  setTimeout(() => document.addEventListener("mousedown", folderMenuOutside, true), 0);
+}
+function renameFolder(f) {
+  dialog(`<form><h4>Rename folder</h4>
+    <input class="field" name="n" value="${esc(f.name)}" maxlength="60" autofocus />
+    <div class="actions"><button type="button" class="btn" data-cancel>Cancel</button><button class="btn primary">Save</button></div></form>`,
+    async (dl) => {
+      try { await invoke("rename_folder", { id: f.id, name: dl.querySelector("[name=n]").value }); } catch (e) { return fail(e); }
+      await afterFolderChange();
+    });
+}
+function deleteFolder(f) {
+  dialog(`<form><h4>Delete “${esc(f.name)}”?</h4>
+    <p class="hint" style="margin:0 0 12px">The folder goes away. Its ${f.count === 1 ? "note stays" : "notes stay"} in Margin.</p>
+    <div class="actions"><button type="button" class="btn" data-cancel>Cancel</button><button class="btn primary">Delete folder</button></div></form>`,
+    async () => {
+      await invoke("delete_folder", { id: f.id }).catch(fail);
+      if (S.folder === f.id) S.folder = null;
+      await afterFolderChange();
+    });
+}
+async function afterFolderChange() {
+  await Promise.all([loadFolders(), loadMeetings()]);
+  if (S.view === "note" && S.meetingId) await refreshDetail();
+}
+async function fileNote(meetingId, folderId, on) {
+  try { await invoke("set_meeting_folder", { meetingId, folderId, on }); } catch (e) { return fail(e); }
+  await afterFolderChange();
+}
+
+$("#lists").addEventListener("dragstart", (e) => {
+  const m = e.target.closest("[data-meeting]");
+  if (m) { e.dataTransfer.setData("text/x-margin-note", m.dataset.meeting); e.dataTransfer.effectAllowed = "link"; }
+});
+$("#lists").addEventListener("dragover", (e) => {
+  const f = e.target.closest("[data-folder]");
+  if (f && e.dataTransfer.types.includes("text/x-margin-note")) { e.preventDefault(); f.classList.add("drop"); }
+});
+$("#lists").addEventListener("dragleave", (e) => e.target.closest("[data-folder]")?.classList.remove("drop"));
+$("#lists").addEventListener("drop", (e) => {
+  const f = e.target.closest("[data-folder]");
+  const id = e.dataTransfer.getData("text/x-margin-note");
+  if (!f || !id) return;
+  e.preventDefault();
+  const name = S.folders.find((x) => x.id === f.dataset.folder)?.name;
+  fileNote(id, f.dataset.folder, true).then(() => toast(`Added to ${name}`));
+});
+
 $("#lists").addEventListener("click", (e) => {
+  const fm = e.target.closest("[data-folder-menu]");
+  if (fm) { e.stopPropagation(); return openFolderMenu(fm.dataset.folderMenu, fm); }
+  if (e.target.closest("[data-folders-all]")) { S.allFolders = true; return renderSidebar(); }
+  const fo = e.target.closest("[data-folder]");
+  if (fo) { S.folder = S.folder === fo.dataset.folder ? null : fo.dataset.folder; return renderSidebar(); }
   const m = e.target.closest("[data-meeting]");
   if (m) return openMeeting(m.dataset.meeting).catch(fail);
   const ev = e.target.closest("[data-event]");
@@ -563,6 +667,7 @@ function renderNote(v, soft) {
     <div class="meta">
       <span class="chip">${ICON.cal}${esc(new Date(m.created_at).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }))} · ${fmtTime(m.created_at)}</span>
       ${m.duration_ms ? `<span class="chip">${fmtDur(m.duration_ms)}</span>` : ""}
+      ${folderChipsHtml(d)}
       ${att.slice(0, 5).map((a, i) => `<span class="chip" title="${esc(a.email || "")}"><span class="av" style="background:${SP_COLORS[i % 6]}">${esc(initials(a.name))}</span>${esc(a.name)}</span>`).join("")}
       ${att.length > 5 ? `<span class="chip">+${att.length - 5}</span>` : ""}
       ${m.meeting_url ? `<a class="chip" href="#" id="joinLink">${ICON.link}Join call</a>` : ""}
@@ -615,6 +720,62 @@ function renderNote(v, soft) {
   const ed = $("#notesEditor");
   if (ed) { autoGrow(ed); if (editorFocused) ed.focus(); }
   if (S.tab === "transcript" && isRec) v.scrollTop = v.scrollHeight;
+}
+
+// Folders on a note: one chip per folder. With none, a single quiet "Folder" chip, or the
+// suggested folder in its place (one click to accept, × to dismiss for this note).
+function folderChipsHtml(d) {
+  const fs = d.folders || [];
+  if (fs.length) return fs.map((f) => `<button class="chip folder-chip" data-folder-pick title="Change folders">${ICON.folder}${esc(f.name)}</button>`).join("");
+  if (d.folder_suggestion) {
+    return `<span class="chip folder-chip sug" title="Suggested from your other notes">${ICON.folder}<button data-sug-add>Add to ${esc(d.folder_suggestion.name)}</button><button class="x" data-sug-no title="Not this folder" aria-label="Dismiss suggestion">×</button></span>`;
+  }
+  return `<button class="chip folder-chip add" data-folder-pick title="Add to folder">${ICON.folder}Folder</button>`;
+}
+
+function closeFolderPicker() { $("#folderPop")?.remove(); document.removeEventListener("mousedown", folderPickerOutside, true); }
+function folderPickerOutside(e) { if (!e.target.closest("#folderPop") && !e.target.closest("[data-folder-pick]")) closeFolderPicker(); }
+function openFolderPicker(anchor) {
+  if ($("#folderPop")) return closeFolderPicker();
+  const pop = document.createElement("div");
+  pop.id = "folderPop";
+  pop.className = "menu-pop folder-pop";
+  const r = anchor.getBoundingClientRect();
+  pop.style.left = `${Math.min(r.left, window.innerWidth - 280)}px`;
+  pop.style.top = `${r.bottom + 6}px`;
+  document.body.appendChild(pop);
+  paintFolderPicker();
+  setTimeout(() => document.addEventListener("mousedown", folderPickerOutside, true), 0);
+}
+function paintFolderPicker() {
+  const pop = $("#folderPop");
+  if (!pop || !S.detail) return;
+  const d = S.detail, m = d.meeting;
+  const inIds = (d.folders || []).map((f) => f.id);
+  const auto = inIds.length > 0 && inIds.every((id) => (d.series_folders || []).includes(id));
+  pop.innerHTML = `${S.folders.map((f) => `<button class="pick ${inIds.includes(f.id) ? "on" : ""}" data-fid="${esc(f.id)}"><span class="box">${ICON.check}</span>${esc(f.name)}</button>`).join("")}
+    <form class="new-folder"><input class="field" name="n" placeholder="${S.folders.length ? "New folder…" : "Name your first folder"}" maxlength="60" spellcheck="false" /></form>
+    ${d.has_series && inIds.length ? `<label class="auto-add"><input type="checkbox" ${auto ? "checked" : ""} /> Auto-add future “${esc(m.title)}” meetings</label>` : ""}`;
+  pop.querySelectorAll("[data-fid]").forEach((b) => (b.onclick = async () => {
+    await fileNote(m.id, b.dataset.fid, !b.classList.contains("on"));
+    paintFolderPicker();
+  }));
+  pop.querySelector(".new-folder").onsubmit = async (e) => {
+    e.preventDefault();
+    const name = e.target.n.value.trim();
+    if (!name) return;
+    try { await invoke("create_folder", { name, meetingId: m.id }); } catch (err) { return fail(err); }
+    await afterFolderChange();
+    paintFolderPicker();
+  };
+  const cb = pop.querySelector(".auto-add input");
+  if (cb) cb.onchange = async () => {
+    for (const id of inIds) await invoke("set_folder_series", { meetingId: m.id, folderId: id, on: cb.checked }).catch(fail);
+    await refreshDetail();
+    paintFolderPicker();
+    toast(cb.checked ? "Future meetings in this series will be added automatically" : "Future meetings won't be added automatically");
+  };
+  if (!S.folders.length) pop.querySelector(".new-folder input").focus();
 }
 
 // Who wrote what: the AI notes carry their provenance at the top.
@@ -746,6 +907,11 @@ function autoGrow(el) { el.style.height = "auto"; el.style.height = Math.max(320
 let saveTimer = null;
 function bindNote(v) {
   const d = S.detail, m = d.meeting;
+  v.querySelectorAll("[data-folder-pick]").forEach((b) => (b.onclick = () => openFolderPicker(b)));
+  const sa = v.querySelector("[data-sug-add]");
+  if (sa) sa.onclick = () => fileNote(m.id, d.folder_suggestion.id, true).then(() => toast(`Added to ${d.folder_suggestion.name}`));
+  const sn = v.querySelector("[data-sug-no]");
+  if (sn) sn.onclick = async () => { await invoke("dismiss_folder_suggestion", { meetingId: m.id }).catch(fail); await refreshDetail(); };
   const title = $("#titleInput");
   title.oninput = () => { clearTimeout(title._t); title._t = setTimeout(() => invoke("update_meeting", { id: m.id, field: "title", value: title.value }).then(loadMeetings), 400); m.title = title.value; };
   const ed = $("#notesEditor");
@@ -1551,7 +1717,7 @@ function wireEvents() {
   // Changed outside the window (e.g. "Turn off auto-record" in the menu bar).
   listen("settings-changed", async () => { S.settings = await invoke("get_settings"); renderBadge(); renderBanner(true); if (S.view === "settings") render(); });
   listen("open-meeting", (p) => { loadMeetings(); openMeeting(p.id, "notes").catch(fail); });
-  listen("meeting-updated", (p) => { loadMeetings(); if (p.id === S.meetingId) refreshDetail(); });
+  listen("meeting-updated", (p) => { loadMeetings(); loadFolders(); if (p.id === S.meetingId) refreshDetail(); });
   listen("busy", (p) => { if (S.detail && p.id === S.meetingId) { S.detail.busy = p.what; const bz = $("#busyBox"); if (bz) bz.innerHTML = busyHtml(S.detail); } });
   listen("warning", (m) => {
     if (/participants' audio|Screen Recording/i.test(m)) { S.sysWarn = "system"; renderSysWarn(); return; }
@@ -1585,7 +1751,7 @@ function wireEvents() {
   try {
     wireEvents();
     [S.settings, S.perms, S.prompt] = await Promise.all([invoke("get_settings"), invoke("permissions"), invoke("current_prompt")]);
-    await Promise.all([loadMeetings(), loadModels(), loadEvents()]);
+    await Promise.all([loadMeetings(), loadModels(), loadEvents(), loadFolders()]);
     if (!S.settings.onboarded) { S.view = "onboarding"; S.vaults = await invoke("obsidian_vaults").catch(() => []); }
     render();
     renderBadge();

@@ -5,6 +5,7 @@ pub mod audio_rec;
 pub mod calendar;
 pub mod catalog;
 pub mod detect;
+pub mod folders;
 pub mod diarize;
 pub mod ics;
 pub mod llm;

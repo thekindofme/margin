@@ -28,7 +28,14 @@
     ],
     segments: { m1: segs, m2: [], m3: [], m4: segs.slice(0, 3) },
     chats: { m1: [] },
+    // #nofolders starts with none, to preview the clean first-run sidebar.
+    folders: flag("nofolders") ? [] : [{ id: "f1", name: "Product" }, { id: "f2", name: "Hiring" }],
+    filed: flag("nofolders") ? [] : [["m1", "f1"], ["m4", "f2"]],
+    series: [],
+    dismissed: [],
   };
+  const fcount = (id) => db.filed.filter(([, f]) => f === id).length;
+  const foldersOf = (mid) => db.filed.filter(([m]) => m === mid).map(([, f]) => db.folders.find((x) => x.id === f)).filter(Boolean);
   const models = [
     ["parakeet-v2", "Parakeet TDT 0.6B v2", "The sharpest English model for everyday meetings", 451, ["en"], 0.86, 0.86, false, true, true],
     ["parakeet-v3", "Parakeet TDT 0.6B v3", "Fast, accurate notes in 25 European languages", 456, ["en", "de", "fr"], 0.82, 0.86, false, true, true],
@@ -46,7 +53,14 @@
     permissions: () => ({ microphone: "granted", system_audio: "granted", calendar: "granted", notifications: "not_determined" }),
     grant_permission: ({ kind }) => ({ status: "not_determined", opened_settings: true }),
     current_prompt: () => (flag("prompt") ? { kind: "calendar", title: "Design review", event: events[0].event, app: null, at: iso(now) } : null),
-    list_meetings: ({ query }) => db.meetings.filter((m) => !query || m.title.toLowerCase().includes(query.toLowerCase())).map((m) => ({ ...m, snippet: m.enhanced.slice(0, 200) })),
+    list_meetings: ({ query }) => db.meetings.filter((m) => !query || m.title.toLowerCase().includes(query.toLowerCase())).map((m) => ({ ...m, snippet: m.enhanced.slice(0, 200), folders: foldersOf(m.id).map((f) => f.id) })),
+    list_folders: () => db.folders.map((f) => ({ ...f, count: fcount(f.id) })).sort((a, b) => a.name.localeCompare(b.name)),
+    create_folder: ({ name, meetingId: meeting_id }) => { let f = db.folders.find((x) => x.name.toLowerCase() === name.trim().toLowerCase()); if (!f) { f = { id: "f" + Date.now(), name: name.trim() }; db.folders.push(f); } if (meeting_id && !db.filed.some(([m, x]) => m === meeting_id && x === f.id)) db.filed.push([meeting_id, f.id]); return { ...f, count: fcount(f.id) }; },
+    rename_folder: ({ id, name }) => { db.folders.find((f) => f.id === id).name = name.trim(); },
+    delete_folder: ({ id }) => { db.folders = db.folders.filter((f) => f.id !== id); db.filed = db.filed.filter(([, f]) => f !== id); },
+    set_meeting_folder: ({ meetingId: meeting_id, folderId: folder_id, on }) => { db.filed = db.filed.filter(([m, f]) => !(m === meeting_id && f === folder_id)); if (on) db.filed.push([meeting_id, folder_id]); else db.series = db.series.filter((f) => f !== folder_id); },
+    set_folder_series: ({ folderId: folder_id, on }) => { db.series = db.series.filter((f) => f !== folder_id); if (on) db.series.push(folder_id); },
+    dismiss_folder_suggestion: ({ meetingId: meeting_id }) => { db.dismissed.push(meeting_id); },
     list_models: () => ({ models, active: db.settings.model_id, downloading: [], speaker_model: true }),
     upcoming_events: () => events,
     providers: () => ({
@@ -57,7 +71,12 @@
       ],
       templates: [{ id: "auto", name: "Auto" }, { id: "one_on_one", name: "1:1" }, { id: "team", name: "Team meeting" }, { id: "customer", name: "Customer call" }],
     }),
-    get_meeting: ({ id }) => ({ meeting: db.meetings.find((m) => m.id === id), segments: db.segments[id] || [], chats: db.chats[id] || [], busy: null }),
+    get_meeting: ({ id }) => {
+      const meeting = db.meetings.find((m) => m.id === id), folders = foldersOf(id);
+      // Mock suggestion: Customer call → Product (the real one compares people, titles and notes).
+      const sug = !folders.length && !db.dismissed.includes(id) && /customer|beta|launch/i.test(meeting.title) ? db.folders.find((f) => f.name === "Product") : null;
+      return { meeting, segments: db.segments[id] || [], chats: db.chats[id] || [], busy: null, folders, folder_suggestion: sug || null, series_folders: db.series, has_series: !!meeting.event_id || id === "m1" };
+    },
     create_meeting: ({ title }) => { const m = { id: "n" + Date.now(), title: title || "", created_at: iso(Date.now()), duration_ms: 0, attendees: [], notes: "", enhanced: "", template: "auto", status: "draft", speakers: {}, meeting_url: null }; db.meetings.unshift(m); db.segments[m.id] = []; return m; },
     update_meeting: ({ id, field, value }) => { const m = db.meetings.find((x) => x.id === id); m[field] = value; if (field === "enhanced") m.enhanced_edited = true; },
     delete_meeting: ({ id }) => { db.meetings = db.meetings.filter((m) => m.id !== id); },

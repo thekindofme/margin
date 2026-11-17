@@ -120,7 +120,107 @@ pub fn new_meeting(state: &AppState, title: &str, event: Option<&CalEvent>) -> R
         ..Default::default()
     };
     state.store.create_meeting(&m)?;
+    // "Auto-add future meetings": file this note where earlier meetings of the series went.
+    for fid in state.store.series_folders(&series_of(&m)).unwrap_or_default() {
+        let _ = state.store.set_meeting_folder(&m.id, &fid, true);
+    }
     Ok(m)
+}
+
+// ------------------------------------------------------------------ folders
+
+/// Bumped whenever folders or filing change, so cached suggestions are recomputed.
+pub static FOLDERS_VERSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static SUGGESTIONS: parking_lot::Mutex<Option<std::collections::HashMap<String, (u64, Option<margin_core::store::Folder>)>>> =
+    parking_lot::Mutex::new(None);
+
+pub fn folders_changed() {
+    FOLDERS_VERSION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Series key for "auto-add future meetings": only calendar notes have one.
+pub fn series_of(m: &Meeting) -> String {
+    if m.event_id.is_none() {
+        return String::new();
+    }
+    let k = margin_core::folders::series_key(&m.title);
+    if matches!(k.as_str(), "" | "untitled" | "untitled meeting" | "new note") { String::new() } else { k }
+}
+
+fn note_info(m: &Meeting) -> margin_core::folders::NoteInfo {
+    margin_core::folders::NoteInfo {
+        title: m.title.clone(),
+        attendees: m.attendees.clone(),
+        text: if m.enhanced.trim().is_empty() { m.notes.clone() } else { m.enhanced.clone() },
+        from_calendar: m.event_id.is_some(),
+    }
+}
+
+/// The folder to offer for a note that's in none: computed on this Mac from the notes already
+/// filed; else what the AI picked after the meeting (if an AI is set up). Cached, because the
+/// note view refreshes often while recording.
+pub fn folder_suggestion(state: &AppState, m: &Meeting) -> Option<margin_core::store::Folder> {
+    use std::hash::{Hash, Hasher};
+    let hint = state.store.folder_hint(&m.id).unwrap_or_default();
+    if hint == "dismissed" {
+        return None;
+    }
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (&m.title, m.attendees.len(), m.enhanced.len(), m.notes.len() / 200, &hint).hash(&mut h);
+    FOLDERS_VERSION.load(std::sync::atomic::Ordering::SeqCst).hash(&mut h);
+    let key = h.finish();
+    if let Some((k, v)) = SUGGESTIONS.lock().as_ref().and_then(|c| c.get(&m.id)) {
+        if *k == key {
+            return v.clone();
+        }
+    }
+    let folders = state.store.list_folders().unwrap_or_default();
+    let found = if folders.is_empty() {
+        None
+    } else {
+        let local = margin_core::folders::suggest(&note_info(m), &state.store.filed_notes().unwrap_or_default())
+            .and_then(|(id, _)| folders.iter().find(|f| f.id == id).cloned());
+        local.or_else(|| hint.strip_prefix("ai:").and_then(|id| folders.iter().find(|f| f.id == id).cloned()))
+    };
+    SUGGESTIONS.lock().get_or_insert_with(Default::default).insert(m.id.clone(), (key, found.clone()));
+    found
+}
+
+/// After the AI notes are written: if nothing on this Mac suggests a folder, ask the chosen AI
+/// to pick one of the user's folders (or none). One short call; the answer is remembered.
+fn ai_folder_pick(state: &AppState, id: &str, p: llm::Provider, model: &str) {
+    let Ok(Some(m)) = state.store.get_meeting(id) else { return };
+    let folders = state.store.list_folders().unwrap_or_default();
+    if folders.is_empty()
+        || !state.store.folders_of(id).unwrap_or_default().is_empty()
+        || state.store.folder_hint(id).is_some()
+        || folder_suggestion(state, &m).is_some()
+    {
+        return;
+    }
+    let filed = state.store.filed_notes().unwrap_or_default();
+    let mut list = String::new();
+    for f in &folders {
+        let titles: Vec<&str> = filed.iter().filter(|(fid, _)| fid == &f.id).map(|(_, n)| n.title.as_str()).take(4).collect();
+        list.push_str(&format!("- {} (e.g. {})\n", f.name, if titles.is_empty() { "empty".to_string() } else { titles.join("; ") }));
+    }
+    let text: String = note_info(&m).text.chars().take(2500).collect();
+    let sys = "You file meeting notes into the user's folders. Reply with exactly one folder name from the list, or NONE if no folder clearly fits. No other words.";
+    let prompt = format!("Folders:\n{list}\nMeeting: {}\n\nNotes:\n{text}", if m.title.is_empty() { "Untitled" } else { &m.title });
+    let hint = match llm::complete(p, model, sys, &prompt) {
+        Ok(out) => {
+            let ans = out.lines().next().unwrap_or("").trim().trim_matches(|c: char| c == '"' || c == '.' || c == '*').to_string();
+            match folders.iter().find(|f| f.name.eq_ignore_ascii_case(&ans)) {
+                Some(f) => format!("ai:{}", f.id),
+                None => "ai-none".to_string(),
+            }
+        }
+        Err(e) => {
+            log::warn!("folder suggestion by AI failed: {e}");
+            return;
+        }
+    };
+    let _ = state.store.set_folder_hint(id, &hint);
 }
 
 pub fn emit_rec_state(app: &AppHandle) {
@@ -340,6 +440,10 @@ pub fn after_meeting(app: &AppHandle, id: &str) -> Result<()> {
     let res = enhance(app, &m, &segments, p, &model);
     set_busy(app, id, None);
     res?;
+
+    // 4. Folder suggestion, only if nothing local fits.
+    ai_folder_pick(&state, id, p, &model);
+    let _ = app.emit("meeting-updated", json!({"id": id}));
     notify(app, "Your notes are ready", if m.title.is_empty() { "Margin" } else { &m.title });
     Ok(())
 }

@@ -56,6 +56,18 @@ pub struct MeetingSummary {
     pub status: String,
     pub attendees: Vec<Attendee>,
     pub snippet: String,
+    /// Ids of the folders this note is in.
+    #[serde(default)]
+    pub folders: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Folder {
+    pub id: String,
+    pub name: String,
+    /// Notes in the folder.
+    #[serde(default)]
+    pub count: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,6 +128,21 @@ CREATE TABLE IF NOT EXISTS chats (
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS event_flags (event_id TEXT PRIMARY KEY, flag TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS folders (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS meeting_folders (
+  meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+  folder_id TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+  PRIMARY KEY (meeting_id, folder_id)
+);
+CREATE INDEX IF NOT EXISTS meeting_folders_folder ON meeting_folders(folder_id);
+-- "Auto-add future meetings": calendar notes whose series key matches go to the folder.
+CREATE TABLE IF NOT EXISTS folder_series (
+  series TEXT NOT NULL,
+  folder_id TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+  PRIMARY KEY (series, folder_id)
+);
+-- Per-note folder suggestion state: 'dismissed', 'ai:<folder id>' or 'ai-none'.
+CREATE TABLE IF NOT EXISTS folder_hints (meeting_id TEXT PRIMARY KEY REFERENCES meetings(id) ON DELETE CASCADE, hint TEXT NOT NULL);
 "#;
 
 fn src_str(s: AudioSource) -> &'static str {
@@ -314,9 +341,23 @@ impl Store {
                 status: r.get(4)?,
                 attendees: serde_json::from_str(&r.get::<_, String>(5)?).unwrap_or_default(),
                 snippet: r.get::<_, Option<String>>(6)?.unwrap_or_default(),
+                folders: vec![],
             })
         })?;
-        Ok(rows.filter_map(|r| r.ok()).collect())
+        let mut out: Vec<MeetingSummary> = rows.filter_map(|r| r.ok()).collect();
+        let mut by: std::collections::HashMap<String, Vec<String>> = Default::default();
+        // An older database opened read-only may not have folders yet.
+        if let Ok(mut st) = c.prepare("SELECT meeting_id, folder_id FROM meeting_folders") {
+            if let Ok(rows) = st.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))) {
+                for (m, f) in rows.flatten() {
+                    by.entry(m).or_default().push(f);
+                }
+            }
+        }
+        for m in &mut out {
+            m.folders = by.remove(&m.id).unwrap_or_default();
+        }
+        Ok(out)
     }
 
     /// Resolve a full or prefix id (agents use short 8-char ids).
@@ -435,11 +476,168 @@ impl Store {
         )?;
         Ok(())
     }
+
+    // ---------------------------------------------------------------- folders
+
+    /// All folders, alphabetical, with note counts. Empty on a database without folders.
+    pub fn list_folders(&self) -> Result<Vec<Folder>> {
+        let c = self.conn.lock();
+        let Ok(mut st) = c.prepare(
+            "SELECT f.id, f.name, (SELECT COUNT(*) FROM meeting_folders mf WHERE mf.folder_id=f.id)
+             FROM folders f ORDER BY f.name COLLATE NOCASE",
+        ) else {
+            return Ok(vec![]);
+        };
+        let rows = st.query_map([], |r| Ok(Folder { id: r.get(0)?, name: r.get(1)?, count: r.get::<_, i64>(2)? as usize }))?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    /// Create a folder, or return the existing one with the same name (ignoring case).
+    pub fn create_folder(&self, name: &str) -> Result<Folder> {
+        let name = name.trim();
+        anyhow::ensure!(!name.is_empty(), "folder name is empty");
+        anyhow::ensure!(name.chars().count() <= 60, "folder name is too long");
+        if let Some(f) = self.list_folders()?.into_iter().find(|f| f.name.eq_ignore_ascii_case(name)) {
+            return Ok(f);
+        }
+        let f = Folder { id: uuid::Uuid::new_v4().to_string(), name: name.to_string(), count: 0 };
+        self.conn.lock().execute(
+            "INSERT INTO folders (id,name,created_at) VALUES (?1,?2,?3)",
+            params![f.id, f.name, Utc::now().to_rfc3339()],
+        )?;
+        Ok(f)
+    }
+
+    pub fn rename_folder(&self, id: &str, name: &str) -> Result<()> {
+        let name = name.trim();
+        anyhow::ensure!(!name.is_empty(), "folder name is empty");
+        anyhow::ensure!(name.chars().count() <= 60, "folder name is too long");
+        if self.list_folders()?.iter().any(|f| f.id != id && f.name.eq_ignore_ascii_case(name)) {
+            anyhow::bail!("there's already a folder called {name}");
+        }
+        self.conn.lock().execute("UPDATE folders SET name=?2 WHERE id=?1", params![id, name])?;
+        Ok(())
+    }
+
+    /// Delete a folder. Its notes are kept; they just leave the folder.
+    pub fn delete_folder(&self, id: &str) -> Result<()> {
+        self.conn.lock().execute("DELETE FROM folders WHERE id=?1", [id])?;
+        Ok(())
+    }
+
+    /// Folders a note is in.
+    pub fn folders_of(&self, meeting_id: &str) -> Result<Vec<Folder>> {
+        let c = self.conn.lock();
+        let Ok(mut st) = c.prepare(
+            "SELECT f.id, f.name FROM folders f JOIN meeting_folders mf ON mf.folder_id=f.id
+             WHERE mf.meeting_id=?1 ORDER BY f.name COLLATE NOCASE",
+        ) else {
+            return Ok(vec![]);
+        };
+        let rows = st.query_map([meeting_id], |r| Ok(Folder { id: r.get(0)?, name: r.get(1)?, count: 0 }))?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    pub fn set_meeting_folder(&self, meeting_id: &str, folder_id: &str, on: bool) -> Result<()> {
+        let c = self.conn.lock();
+        if on {
+            c.execute("INSERT OR IGNORE INTO meeting_folders (meeting_id, folder_id) VALUES (?1,?2)", params![meeting_id, folder_id])?;
+        } else {
+            c.execute("DELETE FROM meeting_folders WHERE meeting_id=?1 AND folder_id=?2", params![meeting_id, folder_id])?;
+        }
+        Ok(())
+    }
+
+    /// Every filed note as `(folder_id, info)`, for suggestions. Text is capped per note.
+    pub fn filed_notes(&self) -> Result<Vec<(String, crate::folders::NoteInfo)>> {
+        let c = self.conn.lock();
+        let Ok(mut st) = c.prepare(
+            "SELECT mf.folder_id, m.title, m.attendees, substr(CASE WHEN m.enhanced<>'' THEN m.enhanced ELSE m.notes END, 1, 4000), m.event_id IS NOT NULL
+             FROM meeting_folders mf JOIN meetings m ON m.id=mf.meeting_id",
+        ) else {
+            return Ok(vec![]);
+        };
+        let rows = st.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                crate::folders::NoteInfo {
+                    title: r.get(1)?,
+                    attendees: serde_json::from_str(&r.get::<_, String>(2)?).unwrap_or_default(),
+                    text: r.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                    from_calendar: r.get(4)?,
+                },
+            ))
+        })?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    /// Folders that auto-collect calendar notes with this series key.
+    pub fn series_folders(&self, series: &str) -> Result<Vec<String>> {
+        if series.is_empty() {
+            return Ok(vec![]);
+        }
+        let c = self.conn.lock();
+        let Ok(mut st) = c.prepare("SELECT folder_id FROM folder_series WHERE series=?1") else { return Ok(vec![]) };
+        let rows = st.query_map([series], |r| r.get::<_, String>(0))?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    pub fn set_series_folder(&self, series: &str, folder_id: &str, on: bool) -> Result<()> {
+        anyhow::ensure!(!series.is_empty(), "this note has no recurring series");
+        let c = self.conn.lock();
+        if on {
+            c.execute("INSERT OR IGNORE INTO folder_series (series, folder_id) VALUES (?1,?2)", params![series, folder_id])?;
+        } else {
+            c.execute("DELETE FROM folder_series WHERE series=?1 AND folder_id=?2", params![series, folder_id])?;
+        }
+        Ok(())
+    }
+
+    pub fn folder_hint(&self, meeting_id: &str) -> Option<String> {
+        self.conn
+            .lock()
+            .query_row("SELECT hint FROM folder_hints WHERE meeting_id=?1", [meeting_id], |r| r.get(0))
+            .ok()
+    }
+
+    pub fn set_folder_hint(&self, meeting_id: &str, hint: &str) -> Result<()> {
+        self.conn.lock().execute(
+            "INSERT INTO folder_hints (meeting_id, hint) VALUES (?1,?2) ON CONFLICT(meeting_id) DO UPDATE SET hint=excluded.hint",
+            params![meeting_id, hint],
+        )?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn folders() {
+        let dir = std::env::temp_dir().join(format!("margin-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let s = Store::open(&dir.join("t.sqlite")).unwrap();
+        let m = Meeting { id: "m1".into(), title: "Acme kickoff".into(), created_at: Utc::now(), template: "auto".into(), status: "draft".into(), ..Default::default() };
+        s.create_meeting(&m).unwrap();
+        let f = s.create_folder(" Acme ").unwrap();
+        assert_eq!(s.create_folder("acme").unwrap().id, f.id, "same name reuses the folder");
+        s.set_meeting_folder("m1", &f.id, true).unwrap();
+        s.set_meeting_folder("m1", &f.id, true).unwrap();
+        assert_eq!(s.list_folders().unwrap()[0].count, 1);
+        assert_eq!(s.list_meetings(None, 10).unwrap()[0].folders, vec![f.id.clone()]);
+        assert_eq!(s.filed_notes().unwrap()[0].1.title, "Acme kickoff");
+        let g = s.create_folder("Hiring").unwrap();
+        assert!(s.rename_folder(&g.id, "ACME").is_err(), "no duplicate names");
+        s.set_series_folder("acme kickoff", &f.id, true).unwrap();
+        assert_eq!(s.series_folders("acme kickoff").unwrap(), vec![f.id.clone()]);
+        s.set_folder_hint("m1", "dismissed").unwrap();
+        assert_eq!(s.folder_hint("m1").as_deref(), Some("dismissed"));
+        s.delete_folder(&f.id).unwrap();
+        assert!(s.folders_of("m1").unwrap().is_empty());
+        assert!(s.get_meeting("m1").unwrap().is_some(), "deleting a folder keeps its notes");
+        assert!(s.series_folders("acme kickoff").unwrap().is_empty());
+    }
 
     #[test]
     fn roundtrip() {

@@ -22,6 +22,8 @@ When you quote or attribute something, say which source it came from. Check impo
 ```bash
 margin ls                          # recent meetings: id date len title · people [notes ai tx:N]
 margin ls --since 7d -q pricing    # filter by age and text
+margin folders                     # the user's folders (in:Name tags in ls)
+margin ls -f "Acme"                # meetings in one folder
 margin search "renewal date"       # hits labelled [notes] / [ai] / [transcript mm:ss Speaker]
 margin show 641c10e6               # AI summary + user notes (no transcript)
 margin show 641c10e6 notes         # only the user's own notes

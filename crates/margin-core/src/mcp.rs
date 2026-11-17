@@ -13,12 +13,19 @@ fn tools() -> Value {
         {
             "name": "list_meetings",
             "annotations": {"title": "List meetings", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
-            "description": "List recent meetings (newest first) with short ids, date, length, people and which content exists: notes (user-written), ai (LLM summary), tx:N (transcript lines).",
+            "description": "List recent meetings (newest first) with short ids, date, length, people and which content exists: notes (user-written), ai (LLM summary), tx:N (transcript lines), in:Folder (the user's folders).",
             "inputSchema": {"type": "object", "properties": {
+                "folder": {"type": "string", "description": "Only meetings in this folder (see list_folders)"},
                 "query": {"type": "string", "description": "Optional text filter across titles, notes, summaries, transcripts, attendees"},
                 "since": {"type": "string", "description": "Only meetings newer than this, e.g. 7d, 24h, 2w"},
                 "limit": {"type": "integer", "default": 20}
             }}
+        },
+        {
+            "name": "list_folders",
+            "annotations": {"title": "List folders", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
+            "description": "The user's folders of meetings, with how many meetings each holds.",
+            "inputSchema": {"type": "object", "properties": {}}
         },
         {
             "name": "get_meeting",
@@ -67,8 +74,9 @@ fn call(store: &Store, name: &str, args: &Value) -> Result<String> {
     match name {
         "list_meetings" => {
             let since = s(args, "since").map(agent::parse_since).transpose()?;
-            agent::list(store, s(args, "query"), since, n(args, "limit", 20), false)
+            agent::list(store, s(args, "query"), since, s(args, "folder"), n(args, "limit", 20), false)
         }
+        "list_folders" => agent::folders(store, false),
         "get_meeting" => {
             let secs = agent::parse_sections(s(args, "sections").unwrap_or("ai,notes"))?;
             agent::show(store, s(args, "id").unwrap_or(""), &secs, false)

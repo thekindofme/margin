@@ -140,7 +140,8 @@ fn simulate(model: &str, mic: &Path, system: &Path, provider: Option<Provider>) 
 
 const HELP: &str = "margin — read your local Margin meetings (agent-friendly, read-only)
 
-  margin ls [-q TEXT] [--since 7d] [-n 20]      list meetings: id date len title · people [notes ai tx:N]
+  margin ls [-q TEXT] [--since 7d] [-f FOLDER] [-n 20]  list meetings: id date len title · people [notes ai tx:N in:Folder]
+  margin folders                                  folders and how many meetings each holds
   margin show ID [notes,ai,transcript|all]      one meeting; default ai,notes (labelled by source)
   margin tx ID [--from mm:ss] [--to mm:ss] [--speaker NAME] [--grep TEXT] [-n 300]
   margin search TEXT [--in notes|ai|transcript] [-n 20]
@@ -181,7 +182,7 @@ fn agent_cmd(args: &[String]) -> Result<Option<String>> {
     let pos = positional(args);
     let limit = |d: usize| flag(args, &["-n", "--limit"]).and_then(|v| v.parse().ok()).unwrap_or(d);
     let cmd = pos.first().copied().unwrap_or("");
-    if !matches!(cmd, "ls" | "list" | "show" | "tx" | "transcript" | "search" | "mcp") {
+    if !matches!(cmd, "ls" | "list" | "folders" | "show" | "tx" | "transcript" | "search" | "mcp") {
         return Ok(None);
     }
     let db = margin_core::paths::db_path();
@@ -190,8 +191,9 @@ fn agent_cmd(args: &[String]) -> Result<Option<String>> {
     let out = match cmd {
         "ls" | "list" => {
             let since = flag(args, &["--since"]).map(agent::parse_since).transpose()?;
-            agent::list(&store, flag(args, &["-q", "--query"]), since, limit(20), json)?
+            agent::list(&store, flag(args, &["-q", "--query"]), since, flag(args, &["-f", "--folder"]), limit(20), json)?
         }
+        "folders" => agent::folders(&store, json)?,
         "show" => {
             let id = pos.get(1).ok_or_else(|| anyhow!("usage: margin show ID [notes,ai,transcript|all]"))?;
             let secs = agent::parse_sections(pos.get(2).copied().unwrap_or("ai,notes"))?;

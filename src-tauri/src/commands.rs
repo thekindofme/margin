@@ -2,7 +2,7 @@
 use crate::state::{AppState, Settings};
 use crate::{recorder, scheduler};
 
-use margin_core::store::{ChatMessage, Meeting, MeetingSummary};
+use margin_core::store::{ChatMessage, Folder, Meeting, MeetingSummary};
 use margin_core::{audio, catalog, llm, models, CalEvent, Segment};
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -425,17 +425,95 @@ pub struct MeetingDetail {
     segments: Vec<Segment>,
     chats: Vec<ChatMessage>,
     busy: Option<String>,
+    /// Folders the note is in.
+    folders: Vec<Folder>,
+    /// A folder to offer when the note is in none (and the suggestion wasn't dismissed).
+    folder_suggestion: Option<Folder>,
+    /// Folders that auto-collect future meetings of this note's calendar series.
+    series_folders: Vec<String>,
+    /// True when the note came from a calendar event (so "auto-add future meetings" applies).
+    has_series: bool,
 }
 
 #[tauri::command]
 pub fn get_meeting(state: State<AppState>, id: String) -> R<MeetingDetail> {
     let meeting = state.store.get_meeting(&id).map_err(e)?.ok_or("not found")?;
+    let folders = state.store.folders_of(&id).map_err(e)?;
+    let folder_suggestion = if folders.is_empty() { recorder::folder_suggestion(&state, &meeting) } else { None };
+    let series = recorder::series_of(&meeting);
     Ok(MeetingDetail {
         segments: state.store.segments(&id).map_err(e)?,
         chats: state.store.chats(&id).map_err(e)?,
         busy: state.busy.lock().get(&id).cloned(),
+        folders,
+        folder_suggestion,
+        series_folders: state.store.series_folders(&series).map_err(e)?,
+        has_series: !series.is_empty(),
         meeting,
     })
+}
+
+// ------------------------------------------------------------------ folders
+
+#[tauri::command]
+pub fn list_folders(state: State<AppState>) -> R<Vec<Folder>> {
+    state.store.list_folders().map_err(e)
+}
+
+/// Create a folder (or reuse one with the same name); optionally put a note in it.
+#[tauri::command]
+pub fn create_folder(app: AppHandle, state: State<AppState>, name: String, meeting_id: Option<String>) -> R<Folder> {
+    let f = state.store.create_folder(&name).map_err(e)?;
+    recorder::folders_changed();
+    if let Some(id) = meeting_id {
+        state.store.set_meeting_folder(&id, &f.id, true).map_err(e)?;
+        crate::export::schedule(&app, &id);
+    }
+    Ok(f)
+}
+
+#[tauri::command]
+pub fn rename_folder(state: State<AppState>, id: String, name: String) -> R<()> {
+    state.store.rename_folder(&id, &name).map_err(e)?;
+    recorder::folders_changed();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn delete_folder(state: State<AppState>, id: String) -> R<()> {
+    state.store.delete_folder(&id).map_err(e)?;
+    recorder::folders_changed();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_meeting_folder(app: AppHandle, state: State<AppState>, meeting_id: String, folder_id: String, on: bool) -> R<()> {
+    state.store.set_meeting_folder(&meeting_id, &folder_id, on).map_err(e)?;
+    recorder::folders_changed();
+    if !on {
+        // Taking a note out of a folder also stops auto-adding its series there (as in Granola).
+        if let Some(m) = state.store.get_meeting(&meeting_id).map_err(e)? {
+            let series = recorder::series_of(&m);
+            if !series.is_empty() {
+                state.store.set_series_folder(&series, &folder_id, false).map_err(e)?;
+            }
+        }
+    }
+    crate::export::schedule(&app, &meeting_id);
+    Ok(())
+}
+
+/// Turn "auto-add future meetings of this series" on or off for a folder.
+#[tauri::command]
+pub fn set_folder_series(state: State<AppState>, meeting_id: String, folder_id: String, on: bool) -> R<()> {
+    let m = state.store.get_meeting(&meeting_id).map_err(e)?.ok_or("not found")?;
+    state.store.set_series_folder(&recorder::series_of(&m), &folder_id, on).map_err(e)
+}
+
+/// "Not this one": stop suggesting a folder for this note.
+#[tauri::command]
+pub fn dismiss_folder_suggestion(state: State<AppState>, meeting_id: String) -> R<()> {
+    state.store.set_folder_hint(&meeting_id, "dismissed").map_err(e)
 }
 
 #[tauri::command]

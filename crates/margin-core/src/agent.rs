@@ -73,10 +73,19 @@ fn has(segments: usize, m: &MeetingSummary) -> String {
 
 // ------------------------------------------------------------------ list
 
-pub fn list(store: &Store, query: Option<&str>, since: Option<DateTime<Utc>>, limit: usize, as_json: bool) -> Result<String> {
+pub fn list(store: &Store, query: Option<&str>, since: Option<DateTime<Utc>>, folder: Option<&str>, limit: usize, as_json: bool) -> Result<String> {
     let mut ms = store.list_meetings(query, 10_000)?;
     if let Some(s) = since {
         ms.retain(|m| m.created_at >= s);
+    }
+    let folders = store.list_folders()?;
+    let fname = |id: &String| folders.iter().find(|f| &f.id == id).map(|f| f.name.clone()).unwrap_or_default();
+    if let Some(want) = folder {
+        let f = folders
+            .iter()
+            .find(|f| f.name.eq_ignore_ascii_case(want.trim()) || f.id.starts_with(want.trim()))
+            .ok_or_else(|| anyhow!("no folder called '{want}' (see: margin folders)"))?;
+        ms.retain(|m| m.folders.contains(&f.id));
     }
     ms.truncate(limit);
     if as_json {
@@ -90,6 +99,7 @@ pub fn list(store: &Store, query: Option<&str>, since: Option<DateTime<Utc>>, li
                     "has_notes": full.as_ref().map(|f| !f.notes.trim().is_empty()).unwrap_or(false),
                     "has_ai_summary": full.as_ref().map(|f| !f.enhanced.trim().is_empty()).unwrap_or(false),
                     "transcript_lines": store.segments(&m.id).map(|s| s.len()).unwrap_or(0),
+                    "folders": m.folders.iter().map(fname).collect::<Vec<_>>(),
                 })
             })
             .collect();
@@ -115,6 +125,9 @@ pub fn list(store: &Store, query: Option<&str>, since: Option<DateTime<Utc>>, li
         if m.status == "recording" {
             tags.push("LIVE".into());
         }
+        for f in &m.folders {
+            tags.push(format!("in:{}", fname(f).replace(' ', "_")));
+        }
         let p = people(&full);
         let _ = writeln!(
             out,
@@ -128,6 +141,18 @@ pub fn list(store: &Store, query: Option<&str>, since: Option<DateTime<Utc>>, li
         );
     }
     Ok(out.trim_end().to_string())
+}
+
+/// Folders with note counts.
+pub fn folders(store: &Store, as_json: bool) -> Result<String> {
+    let fs = store.list_folders()?;
+    if as_json {
+        return Ok(serde_json::to_string(&fs.iter().map(|f| json!({"name": f.name, "notes": f.count})).collect::<Vec<_>>())?);
+    }
+    if fs.is_empty() {
+        return Ok("no folders".into());
+    }
+    Ok(fs.iter().map(|f| format!("{} ({})", f.name, f.count)).collect::<Vec<_>>().join("\n"))
 }
 
 // ------------------------------------------------------------------ show
