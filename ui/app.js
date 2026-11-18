@@ -181,7 +181,10 @@ async function openMeeting(id, tab) {
 }
 async function refreshDetail() {
   if (S.view !== "note" || !S.meetingId) return;
+  const ed = $("#notesEditor");
+  const typed = ed ? ed.value : null;
   S.detail = await invoke("get_meeting", { id: S.meetingId });
+  if (typed !== null) S.detail.meeting.notes = typed; // a save may still be in flight
   S.detail.audio = await invoke("meeting_audio", { id: S.meetingId }).catch(() => []);
   render(true);
 }
@@ -683,7 +686,9 @@ function renderNote(v, soft) {
   // Soft refreshes while typing only touch the transcript/chat to keep the caret steady.
   // Never throw away an in-progress edit of the AI notes on a background refresh.
   const aiEditing = S.editingAi === m.id && $("#aiEditor");
-  if (soft && (editorFocused || askFocused || aiEditing || document.activeElement?.id === "titleInput")) {
+  // ...except when AI notes have just arrived: they replace the editor, so show them now.
+  const aiArrived = S.tab === "notes" && m.enhanced && !S.showMine && !$("#aiNotes") && !aiEditing;
+  if (soft && !aiArrived && (editorFocused || askFocused || aiEditing || document.activeElement?.id === "titleInput")) {
     const tr = $("#transcriptBox");
     if (tr) tr.innerHTML = transcriptHtml(d);
     const sp = $("#speakersBox");
@@ -726,7 +731,7 @@ function renderNote(v, soft) {
         <div class="note-actions" id="aiActions">${S.confirmRegen === m.id ? regenConfirmHtml() : `
           <button class="btn small" id="aiEdit">Edit</button>
           <button class="btn small" id="toggleMine">My notes</button>
-          <button class="btn small" id="regen">${ICON.spark} Regenerate</button>
+          <button class="btn small" id="regen" ${d.busy ? "disabled" : ""}>${ICON.spark} Regenerate</button>
           <button class="btn small" id="copyMd">${ICON.copy} Copy</button>
           ${formatHtml(tplOpts)}`}
         </div>
@@ -736,7 +741,7 @@ function renderNote(v, soft) {
       h += (noProvider ? choosePromptHtml() : "") + `<div class="sheet"><textarea id="notesEditor" class="editor" spellcheck="true" placeholder="${isRec ? "Jot down what matters — Margin listens and fills in the rest…" : "Write notes here. Start recording and Margin will turn them into full notes."}">${esc(m.notes)}</textarea></div>
         <div class="note-actions">
           ${m.enhanced ? `<button class="btn small" id="toggleMine">Show AI notes</button>` : ""}
-          ${!isRec && (d.segments.length || m.notes.trim()) ? `<button class="btn small ${m.enhanced ? "" : "primary"}" id="regen">${ICON.spark} ${m.enhanced ? "Regenerate" : "Write AI notes"}</button>${formatHtml(tplOpts)}` : ""}
+          ${!isRec && (d.segments.length || m.notes.trim()) ? `<button class="btn small ${m.enhanced ? "" : "primary"}" id="regen" ${d.busy ? "disabled" : ""}>${ICON.spark} ${m.enhanced ? "Regenerate" : "Write AI notes"}</button>${formatHtml(tplOpts)}` : ""}
         </div>`;
     }
   } else if (S.tab === "transcript") {
@@ -967,6 +972,7 @@ function bindNote(v) {
   if (tm) tm.onclick = () => { S.showMine = !S.showMine; render(); };
   const rg = $("#regen");
   if (rg) rg.onclick = () => {
+    if (S.detail?.busy) return;
     if (!S.settings?.provider) return openProviderChooser(enhanceNow);
     // Regenerating over the user's own edits needs an in-page yes (window.confirm is unreliable here).
     if (m.enhanced && m.enhanced_edited && !S.showMine) { S.confirmRegen = m.id; render(); return; }
@@ -1761,7 +1767,7 @@ function wireEvents() {
   listen("settings-changed", async () => { S.settings = await invoke("get_settings"); renderBadge(); renderBanner(true); if (S.view === "settings") render(); });
   listen("open-meeting", (p) => { loadMeetings(); openMeeting(p.id, "notes").catch(fail); });
   listen("meeting-updated", (p) => { loadMeetings(); loadFolders(); if (p.id === S.meetingId) refreshDetail(); });
-  listen("busy", (p) => { if (S.detail && p.id === S.meetingId) { S.detail.busy = p.what; const bz = $("#busyBox"); if (bz) bz.innerHTML = busyHtml(S.detail); } });
+  listen("busy", (p) => { if (S.detail && p.id === S.meetingId) { S.detail.busy = p.what; const bz = $("#busyBox"); if (bz) bz.innerHTML = busyHtml(S.detail); const rg = $("#regen"); if (rg) rg.disabled = !!p.what; } });
   listen("warning", (m) => {
     if (/participants' audio|Screen Recording/i.test(m)) { S.sysWarn = "system"; renderSysWarn(); return; }
     if (/^MIC_(SILENT|QUIET)/.test(m)) { diagnoseMic(/^MIC_SILENT/.test(m) ? "silent" : "quiet"); return; }
