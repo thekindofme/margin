@@ -400,6 +400,16 @@ impl Store {
         Ok(c.last_insert_rowid())
     }
 
+    /// Total transcribed speech in a meeting so far (both sides), in ms.
+    pub fn speech_ms(&self, meeting_id: &str) -> Result<i64> {
+        let c = self.conn.lock();
+        Ok(c.query_row(
+            "SELECT COALESCE(SUM(end_ms - start_ms), 0) FROM segments WHERE meeting_id=?1",
+            [meeting_id],
+            |r| r.get(0),
+        )?)
+    }
+
     pub fn segments(&self, meeting_id: &str) -> Result<Vec<Segment>> {
         let c = self.conn.lock();
         let mut st = c.prepare(

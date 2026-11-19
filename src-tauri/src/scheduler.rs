@@ -20,6 +20,45 @@ fn quiet_after_end() -> Duration {
 }
 /// Stop regardless after this much silence (forgotten recordings).
 const MAX_SILENCE: Duration = Duration::from_secs(15 * 60);
+/// Before any conversation has happened (you're early, waiting for people to join), only a
+/// much longer silence counts as a forgotten recording.
+const MAX_SILENCE_WAITING: Duration = Duration::from_secs(45 * 60);
+/// This much transcribed speech means the meeting has actually happened.
+const CONVERSATION_MS: i64 = 60_000;
+
+/// `"<calendar id>@<start unix>"` -> `"<calendar id>"`: the same event across reschedules.
+fn event_base(id: &str) -> &str {
+    id.rsplit_once('@').filter(|(_, ts)| ts.parse::<i64>().is_ok()).map(|(b, _)| b).unwrap_or(id)
+}
+
+/// The meeting being recorded was moved in the calendar: follow its new end time. Calendar
+/// feeds can lag, so a recording started from stale times must not stop at the old end.
+fn follow_moved_event(state: &AppState) {
+    let (mid, end) = {
+        let rec = state.recording.lock();
+        match rec.as_ref() {
+            Some(r) => (r.meeting_id.clone(), r.event_end),
+            None => return,
+        }
+    };
+    let Some(end) = end else { return };
+    let Ok(Some(m)) = state.store.get_meeting(&mid) else { return };
+    let Some(eid) = m.event_id else { return };
+    let base = event_base(&eid).to_string();
+    let moved = state
+        .events
+        .lock()
+        .iter()
+        .filter(|e| event_base(&e.id) == base && (e.end - end).num_hours().abs() < 12)
+        .min_by_key(|e| (e.end - end).num_seconds().abs())
+        .map(|e| e.end);
+    if let Some(new_end) = moved.filter(|n| *n != end) {
+        log::info!("recording's calendar event moved: now ends {new_end}");
+        if let Some(r) = state.recording.lock().as_mut() {
+            r.event_end = Some(new_end);
+        }
+    }
+}
 /// After the event ends, when we can't tell whether the call app still holds the mic but a
 /// meeting app is running, stop after this much silence instead.
 const QUIET_FALLBACK: Duration = Duration::from_secs(5 * 60);
@@ -124,20 +163,34 @@ fn tick(app: &AppHandle, call_seen_at: &mut Option<Instant>) {
     let now = Utc::now();
 
     // ---- auto stop (never when the user turned it off)
+    follow_moved_event(&state);
     let quiet_state = {
         let rec = state.recording.lock();
-        rec.as_ref().map(|r| (r.last_speech.lock().elapsed(), r.event_end.map(|e| now > e).unwrap_or(false)))
+        rec.as_ref().map(|r| (r.meeting_id.clone(), r.last_speech.lock().elapsed(), r.event_end.map(|e| now > e).unwrap_or(false)))
     };
+    let mut why = "";
     let should_stop = match quiet_state {
-        Some((quiet, event_over)) if s.auto_stop => {
+        Some((mid, quiet, event_over)) if s.auto_stop => {
+            // A meeting can only be "over" once it has happened: a recording started early
+            // (or from a stale calendar time) waits for the conversation instead of stopping
+            // at the event's end.
+            let talked = state.store.speech_ms(&mid).unwrap_or(0) >= CONVERSATION_MS;
             // Overrunning meetings with a reading pause keep recording while the call app
             // still has the mic.
-            (event_over && quiet > quiet_after_end() && call_app_released(quiet)) || quiet > MAX_SILENCE
+            if talked && event_over && quiet > quiet_after_end() && call_app_released(quiet) {
+                why = "event over and quiet";
+                true
+            } else if quiet > if talked { MAX_SILENCE } else { MAX_SILENCE_WAITING } {
+                why = if talked { "15 min of silence" } else { "45 min with no conversation" };
+                true
+            } else {
+                false
+            }
         }
         _ => false,
     };
     if should_stop {
-        log::info!("auto-stopping recording");
+        log::info!("auto-stopping recording: {why}");
         let _ = recorder::stop(app, true);
         recorder::notify(app, "Meeting ended", "Recording stopped. Writing your notes…");
         return;
@@ -229,4 +282,17 @@ pub fn start_for_event(app: &AppHandle, ev: &CalEvent) -> anyhow::Result<()> {
     recorder::start(app, &id, Some(ev.end))?;
     let _ = app.emit("open-meeting", json!({"id": id}));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::event_base;
+
+    #[test]
+    fn event_base_ignores_start_time() {
+        assert_eq!(event_base("ics:abc@google.com@1795064400"), "ics:abc@google.com");
+        assert_eq!(event_base("ics:abc@google.com@1795066200"), event_base("ics:abc@google.com@1795064400"));
+        assert_eq!(event_base("ABC-123:XYZ@1795064400"), "ABC-123:XYZ");
+        assert_eq!(event_base("no-time"), "no-time");
+    }
 }
