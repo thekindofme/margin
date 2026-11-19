@@ -43,6 +43,12 @@
 html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
 body { overflow: hidden; user-select: none; -webkit-user-select: none; }
 input, textarea, [contenteditable] { user-select: text; -webkit-user-select: text; }
+/* Everything you read on a note page can be selected and copied; controls stay unselectable. */
+.page { user-select: text; -webkit-user-select: text; }
+.page button, .page .tabs, .page .chip, .page .meta, .page .note-actions, .page .speakers, .page .fmt, .page .hint, .line .who, .line .ts { user-select: none; -webkit-user-select: none; }
+.ctx-menu { min-width: 190px; }
+.ctx-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+.ctx-menu .kbd { float: right; color: var(--mute); font-size: 12px; margin-left: 18px; }
 button { font: inherit; color: inherit; cursor: default; }
 svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 ::selection { background: var(--ember-soft); }
@@ -475,3 +481,4 @@ body:has(#devPop) #sysWarn { display: none; }
 .menu-pop .swatches { display: flex; gap: 6px; padding: 6px 8px 8px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
 .menu-pop .sw { width: 16px; height: 16px; padding: 0; border: 0; border-radius: 50%; background: var(--fc); cursor: pointer; }
 .menu-pop .sw.on { box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--fc); }
+.page ::selection { background: color-mix(in srgb, var(--ember) 32%, transparent); }

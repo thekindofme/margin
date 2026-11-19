@@ -86,7 +86,40 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     Ok(menu)
 }
 
+/// While recording, show a running "REC 12:34" beside the red icon so it's hard to miss.
+fn start_clock(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let mut last = String::new();
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            let state = app.state::<AppState>();
+            let now = state
+                .recording
+                .lock()
+                .as_ref()
+                .map(|r| (r.offset_ms + r.session.elapsed_ms(), r.session.is_paused()));
+            let title = match now {
+                Some((ms, paused)) => {
+                    let s = ms / 1000;
+                    let t = if s >= 3600 { format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60) } else { format!("{}:{:02}", s / 60, s % 60) };
+                    format!("{} {t}", if paused { "Paused" } else { "REC" })
+                }
+                None => String::new(),
+            };
+            if title != last {
+                if let Some(tray) = app.tray_by_id(TRAY_ID) {
+                    let _ = tray.set_title(if title.is_empty() { None } else { Some(title.as_str()) });
+                    let _ = tray.set_tooltip(Some(if title.is_empty() { "Margin".to_string() } else { format!("Margin is recording · {title}") }));
+                }
+                last = title;
+            }
+        }
+    });
+}
+
 pub fn init(app: &AppHandle) -> tauri::Result<TrayIcon> {
+    start_clock(app);
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(Image::from_bytes(ICON)?)
         .icon_as_template(true)

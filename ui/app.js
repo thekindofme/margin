@@ -1091,6 +1091,7 @@ function moreMenu() {
     <div style="display:grid;gap:8px">
       ${S.settings.obsidian ? `<button type="button" class="btn" id="mxObs">Open in Obsidian</button>` : ""}
       <button type="button" class="btn" id="mxSave">Export Markdown to Documents/Margin</button>
+      <button type="button" class="btn" id="mxCopyAll">Copy everything (Markdown)</button>
       <button type="button" class="btn" id="mxCopy">Copy transcript</button>
       <button type="button" class="btn danger" id="mxDel">Delete note</button>
     </div>
@@ -1098,10 +1099,8 @@ function moreMenu() {
   const mo = $("#mxObs");
   if (mo) mo.onclick = () => invoke("open_in_obsidian", { id: m.id }).catch(fail);
   $("#mxSave").onclick = async () => { try { const p = await invoke("export_markdown", { id: m.id, save: true }); toast(`Saved to ${p}`, 4000); } catch (e) { fail(e); } };
-  $("#mxCopy").onclick = async () => {
-    const t = S.detail.segments.map((s) => `[${fmtTs(s.start_ms)}] ${speakerName(s.speaker, m)}: ${s.text}`).join("\n");
-    await navigator.clipboard.writeText(t); toast("Transcript copied");
-  };
+  $("#mxCopy").onclick = () => copyText(noteText("transcript"), "Transcript");
+  $("#mxCopyAll").onclick = async () => { try { copyText(await invoke("export_markdown", { id: m.id, save: false }), "Note"); } catch (e) { fail(e); } };
   $("#mxDel").onclick = async () => {
     if (!confirm("Delete this note and its transcript? This can't be undone.")) return;
     await invoke("delete_meeting", { id: m.id });
@@ -1110,6 +1109,58 @@ function moreMenu() {
     await loadMeetings(); render();
   };
 }
+
+// ------------------------------------------------------------------ copy menu
+// Right-click anywhere on a note: copy the selection, or one part of the note, or all of it.
+// Text fields keep the system menu (cut / copy / paste / spelling) unless text is outside them.
+function noteText(kind) {
+  const d = S.detail, m = d.meeting;
+  if (kind === "mine") return m.notes.trim();
+  if (kind === "ai") return m.enhanced.trim();
+  if (kind === "transcript") return d.segments.map((s) => `[${fmtTs(s.start_ms)}] ${speakerName(s.speaker, m)}: ${s.text}`).join("\n");
+  return "";
+}
+async function copyText(t, what) {
+  try { await navigator.clipboard.writeText(t); toast(`${what} copied`); } catch (e) { fail(e); }
+}
+function closeCtx() { $("#ctxMenu")?.remove(); document.removeEventListener("mousedown", ctxOutside, true); }
+function ctxOutside(e) { if (!e.target.closest("#ctxMenu")) closeCtx(); }
+function openCtx(e) {
+  closeCtx();
+  if (S.view !== "note" || !S.detail) return;
+  const field = e.target.closest("input, textarea");
+  const sel = field ? field.value.slice(field.selectionStart, field.selectionEnd) : String(window.getSelection() || "");
+  if (field) return; // native menu: cut, copy, paste, look up, spelling
+  e.preventDefault();
+  const d = S.detail, m = d.meeting;
+  const items = [];
+  if (sel.trim()) items.push(["sel", "Copy", "⌘C"]);
+  if (items.length) items.push(["-"]);
+  if (m.notes.trim()) items.push(["mine", "Copy my notes"]);
+  if (m.enhanced.trim()) items.push(["ai", "Copy AI notes"]);
+  if (d.segments.length) items.push(["transcript", "Copy transcript"]);
+  items.push(["all", "Copy everything (Markdown)"]);
+  const pop = document.createElement("div");
+  pop.id = "ctxMenu";
+  pop.className = "menu-pop ctx-menu";
+  pop.innerHTML = items.map(([k, label, kbd]) => k === "-" ? "<hr>" : `<button data-k="${k}">${label}${kbd ? `<span class="kbd">${kbd}</span>` : ""}</button>`).join("");
+  document.body.appendChild(pop);
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  pop.style.left = `${Math.min(e.clientX, innerWidth - w - 8)}px`;
+  pop.style.top = `${Math.min(e.clientY, innerHeight - h - 8)}px`;
+  pop.querySelectorAll("[data-k]").forEach((b) => (b.onclick = async () => {
+    closeCtx();
+    const k = b.dataset.k;
+    if (k === "sel") return copyText(sel, "Selection");
+    if (k === "all") {
+      try { return copyText(await invoke("export_markdown", { id: m.id, save: false }), "Note"); } catch (err) { return fail(err); }
+    }
+    copyText(noteText(k), { mine: "Your notes", ai: "AI notes", transcript: "Transcript" }[k]);
+  }));
+  setTimeout(() => document.addEventListener("mousedown", ctxOutside, true), 0);
+}
+document.addEventListener("contextmenu", openCtx);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeCtx(); });
 
 // ------------------------------------------------------------------ dock
 function dockHtml() {

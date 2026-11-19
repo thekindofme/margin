@@ -83,6 +83,7 @@
     update_meeting: ({ id, field, value }) => { const m = db.meetings.find((x) => x.id === id); m[field] = value; if (field === "enhanced") m.enhanced_edited = true; },
     delete_meeting: ({ id }) => { db.meetings = db.meetings.filter((m) => m.id !== id); },
     rename_speaker: ({ id, key, name }) => { const m = db.meetings.find((x) => x.id === id); m.speakers_guessed = (m.speakers_guessed || []).filter((k) => k !== key); if (name.trim()) m.speakers[key] = name.trim(); else delete m.speakers[key]; },
+    export_markdown: ({ id }) => { const m = db.meetings.find((x) => x.id === id); return `# ${m.title}\n\n${m.enhanced}\n\n## My notes\n${m.notes}`; },
     enhance: async ({ id }) => { await new Promise((r) => setTimeout(r, 700)); const m = db.meetings.find((x) => x.id === id); m.enhanced = "### Summary\n- Regenerated notes\n\n### Action items\n- [ ] Follow up"; m.enhanced_by = "claude:haiku"; m.enhanced_edited = false; return m.enhanced; },
     turn_off_auto_record: () => { db.settings.calendar_mode = "notify"; return db.settings; },
     autostart_get: () => db.autostart ?? false,
