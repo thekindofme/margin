@@ -5,6 +5,7 @@ mod recorder;
 mod scheduler;
 mod state;
 mod tray;
+mod updater;
 
 use state::AppState;
 use std::sync::Arc;
@@ -27,6 +28,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::Builder::new().macos_launcher(tauri_plugin_autostart::MacosLauncher::LaunchAgent).build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState::new(store))
         .setup(|app| {
             let handle = app.handle().clone();
@@ -47,6 +49,14 @@ pub fn run() {
                 }
             });
             scheduler::spawn(handle.clone());
+            // Look for a newer release a few seconds after launch (silent unless one exists).
+            {
+                let h = handle.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(8));
+                    updater::check(&h, false);
+                });
+            }
             // Warm the speech model so the first recording starts instantly.
             std::thread::spawn(move || {
                 let st = handle.state::<AppState>();

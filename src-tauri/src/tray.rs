@@ -82,6 +82,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     }
     menu.append(&PredefinedMenuItem::separator(app)?)?;
     menu.append(&MenuItem::with_id(app, "open", "Open Margin", true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(app, "update", "Check for updates…", true, None::<&str>)?)?;
     menu.append(&MenuItem::with_id(app, "quit", "Quit Margin", true, None::<&str>)?)?;
     Ok(menu)
 }
@@ -130,6 +131,7 @@ pub fn init(app: &AppHandle) -> tauri::Result<TrayIcon> {
             let app = app.clone();
             match ev.id.as_ref() {
                 "open" => show_main(&app),
+                "update" => crate::updater::check(&app, true),
                 "quit" => {
                     recorder::stop_and_wait(&app, std::time::Duration::from_secs(20));
                     app.exit(0)

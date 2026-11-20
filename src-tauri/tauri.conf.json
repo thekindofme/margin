@@ -65,7 +65,16 @@
     "resources": {
       "../skill/margin/SKILL.md": "skill/margin/SKILL.md"
     },
-    "copyright": "Copyright \u00a9 2026 Yasith Fernando. MIT License.",
-    "homepage": "https://margin.yasithfernando.com"
+    "copyright": "Copyright © 2026 Yasith Fernando. MIT License.",
+    "homepage": "https://margin.yasithfernando.com",
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERCMDY3NkQ1QTJGMDNGNDIKUldSQ1AvQ2kxWFlHMjJCaGF1VEVKQThDTDBuSm1RMCtRYW1SYklwV0NNcy9pc2Zlb2NOVVBpR3gK",
+      "endpoints": [
+        "https://github.com/thekindofme/margin/releases/latest/download/latest.json"
+      ]
+    }
   }
 }
