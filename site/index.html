@@ -6,128 +6,202 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Milkrice — meeting notes that stay on your Mac</title>
 <meta name="description" content="Milkrice is a local-first meeting notes app for macOS. It transcribes on your Mac with open speech models, writes up your notes with the AI you already use, and needs no account.">
-<meta name="theme-color" content="#f3efe6" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#161514" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbf5e6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14120e" media="(prefers-color-scheme: dark)">
 <meta property="og:title" content="Milkrice">
 <meta property="og:description" content="Meeting notes that stay on your Mac.">
-<meta property="og:image" content="https://milkrice.yasithfernando.com/assets/empty-state.webp">
+<meta property="og:image" content="https://milkrice.yasithfernando.com/assets/apple-touch-icon.png">
 <link rel="icon" href="assets/favicon.png" type="image/png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/site.css">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..600,100;1,9..144,300..600,100&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/site.css?v=8">
+<link rel="preload" as="image" href="assets/plate.webp" type="image/webp">
+<script>(function(d){if(!matchMedia('(prefers-reduced-motion: reduce)').matches)d.className='live '+(window.CSS&&CSS.supports('animation-timeline: view()')&&!/[?&]nosda/.test(location.search)?'sda':'no-sda')})(document.documentElement)</script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<div class="page">
-  <div class="rule" aria-hidden="true"></div>
 
-  <header class="top">
-    <a class="brand" href="./" aria-label="Milkrice home"><img src="assets/app-icon.webp" alt="" width="30" height="30">Milkrice</a>
-    <nav class="nav" aria-label="Sections">
-      <a href="#how">How it works</a>
-      <a href="#privacy">Privacy</a>
-      <a href="#agents">Agents</a>
-      <a href="#faq">FAQ</a>
-      <a href="https://github.com/thekindofme/milkrice">GitHub</a>
-    </nav>
-  </header>
+<header class="top wrap">
+  <a class="brand" href="./" aria-label="Milkrice home"><img src="assets/app-icon.webp" alt="" width="30" height="30">Milkrice</a>
+  <nav class="nav" aria-label="Sections">
+    <a href="#how">How it works</a>
+    <a href="#privacy">Privacy</a>
+    <a href="#ai">Your AI</a>
+    <a href="#agents">Agents</a>
+    <a href="#faq">FAQ</a>
+    <a href="https://github.com/thekindofme/milkrice">GitHub</a>
+  </nav>
+  <a class="btn btn-sm" href="https://github.com/thekindofme/milkrice/releases/latest">Download</a>
+</header>
 
-  <main id="main">
-    <section class="hero" aria-labelledby="h-hero">
-      <div class="hero-art" id="art" aria-hidden="true"><canvas></canvas></div>
-      <div class="hero-copy">
-        <h1 id="h-hero">Meeting notes that stay on your Mac.</h1>
-        <p class="lede">Milkrice listens to your calls, transcribes them on-device with open speech models, and fills in your rough notes with the AI you already use. No account, no bot joining the call, and no server of ours in between.</p>
-        <div class="cta">
-          <a class="btn" href="https://github.com/thekindofme/milkrice/releases/latest">
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10M5.5 8.8 10 13.2l4.5-4.4M4 16.5h12"/></svg>
-            Download for macOS
-          </a>
-          <a class="link-quiet" href="https://github.com/thekindofme/milkrice">View source on GitHub</a>
-        </div>
-        <p class="req">For macOS 14.2 or later. Apple Silicon recommended.</p>
+<main id="main">
+  <section class="hero wrap" aria-labelledby="h-hero">
+    <div class="hero-copy">
+      <p class="eyebrow">Open source · on-device · macOS</p>
+      <h1 id="h-hero">Meeting notes that <em>stay on your Mac.</em></h1>
+      <p class="lede">Milkrice listens to your calls, transcribes them on-device with open speech models, and fills in your rough notes with the AI you already use. No account, no bot joining the call, and no server of ours in between.</p>
+      <div class="cta">
+        <a class="btn" href="https://github.com/thekindofme/milkrice/releases/latest"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10M5.5 8.8 10 13.2l4.5-4.4M4 16.5h12"/></svg>Download for macOS</a>
+        <span class="brew"><code id="brew">brew install --cask thekindofme/tap/milkrice</code><button type="button" data-copy="brew" aria-label="Copy the Homebrew command">Copy</button></span>
       </div>
-      <p class="hint">Move through the sound to raise your voice. Click to clap, drag to pull the wave.</p>
-    </section>
+      <p class="req">Apple Silicon, macOS 14.2 or later. MIT licensed. <a href="https://github.com/thekindofme/milkrice">View source on GitHub</a></p>
+    </div>
+    <figure class="hero-art">
+      <div class="hero-stage"><div class="hero-plate"><img src="assets/plate.webp" alt="A clay plate lined with banana leaf, holding nine diamond-shaped pieces of milk rice with a spoonful of red chili sambol in the centre." width="880" height="880" fetchpriority="high"></div></div>
+      <figcaption class="hero-cap">Kiribath, cut the way it's always been.</figcaption>
+    </figure>
+  </section>
 
-    <section class="sec" id="how" aria-labelledby="h-how">
-      <h2 class="sec-h" id="h-how">How it works</h2>
-      <div class="sec-body">
-        <ol class="steps">
-          <li><div><h3>Start the meeting, or let your calendar do it</h3>
-            <p>Milkrice reads the calendars already on your Mac. It can nudge you when a meeting begins or start on its own, and it notices unscheduled Zoom, Teams, Webex, Slack and FaceTime calls. When the meeting is over and the room goes quiet, it stops.</p></div></li>
-          <li><div><h3>Jot down what matters</h3>
-            <p>Write as much or as little as you like. Milkrice hears your microphone and the call audio, and transcribes both live on your Mac, telling the speakers apart as it goes.</p></div></li>
-          <li><div><h3>Get the full write-up</h3>
-            <p>Afterwards, Milkrice expands your notes with detail from the transcript, using a template that fits the meeting: a 1:1, a stand-up, a customer call, an interview. Then ask it for what you need next, like the follow-up email.</p></div></li>
+  <section class="name" aria-labelledby="h-name">
+    <div class="wrap">
+      <h2 class="display" id="h-name">Why milk rice? <span>කිරිබත්</span></h2>
+      <p>In Sri Lanka, kiribath is what you cook for a beginning: the new year, a new job, the first day of anything. Rice simmered in coconut milk, pressed flat, cut into diamonds. Milkrice does much the same with a meeting. It takes everything that was said, presses it down, and hands you a few neat pieces.</p>
+    </div>
+  </section>
+
+  <section class="story" id="how" aria-labelledby="h-how">
+    <div class="story-pin wrap">
+      <div class="scene" aria-hidden="true">
+        <div class="plate a"></div>
+        <i class="g a" style="--sx:-42.0cqw;--sy:-4.5cqw;--sr:87deg;--hx:-18.7cqw;--hy:-7.4cqw;--hr:13deg"></i><i class="g a" style="--sx:-42.0cqw;--sy:-1.5cqw;--sr:91deg;--hx:11.5cqw;--hy:-21.6cqw;--hr:91deg"></i><i class="g a" style="--sx:-42.0cqw;--sy:1.5cqw;--sr:82deg;--hx:13.6cqw;--hy:-18.6cqw;--hr:16deg"></i><i class="g a" style="--sx:-42.0cqw;--sy:4.5cqw;--sr:89deg;--hx:26.3cqw;--hy:-1.8cqw;--hr:40deg"></i><i class="g a" style="--sx:-38.2cqw;--sy:-7.5cqw;--sr:92deg;--hx:13.9cqw;--hy:19.7cqw;--hr:71deg"></i><i class="g a" style="--sx:-38.2cqw;--sy:-4.5cqw;--sr:99deg;--hx:-30.4cqw;--hy:-3.6cqw;--hr:52deg"></i><i class="g a" style="--sx:-38.2cqw;--sy:-1.5cqw;--sr:84deg;--hx:-7.1cqw;--hy:-21.5cqw;--hr:147deg"></i><i class="g a" style="--sx:-38.2cqw;--sy:1.5cqw;--sr:84deg;--hx:-2.1cqw;--hy:8.3cqw;--hr:67deg"></i><i class="g a" style="--sx:-38.2cqw;--sy:4.5cqw;--sr:91deg;--hx:0.1cqw;--hy:-32.9cqw;--hr:37deg"></i><i class="g a" style="--sx:-38.2cqw;--sy:7.5cqw;--sr:93deg;--hx:4.3cqw;--hy:-9.7cqw;--hr:105deg"></i><i class="g a" style="--sx:-34.4cqw;--sy:-4.5cqw;--sr:89deg;--hx:-18.5cqw;--hy:3.5cqw;--hr:126deg"></i><i class="g a" style="--sx:-34.4cqw;--sy:-1.5cqw;--sr:85deg;--hx:1.8cqw;--hy:3.7cqw;--hr:158deg"></i><i class="g a" style="--sx:-34.4cqw;--sy:1.5cqw;--sr:94deg;--hx:-25.9cqw;--hy:10.0cqw;--hr:21deg"></i><i class="g a" style="--sx:-34.4cqw;--sy:4.5cqw;--sr:89deg;--hx:22.7cqw;--hy:-3.4cqw;--hr:88deg"></i><i class="g a" style="--sx:-30.5cqw;--sy:-3.0cqw;--sr:82deg;--hx:-3.6cqw;--hy:16.2cqw;--hr:103deg"></i><i class="g a" style="--sx:-30.5cqw;--sy:0.0cqw;--sr:97deg;--hx:-14.3cqw;--hy:0.3cqw;--hr:107deg"></i><i class="g a" style="--sx:-30.5cqw;--sy:3.0cqw;--sr:91deg;--hx:-14.4cqw;--hy:11.1cqw;--hr:170deg"></i><i class="g a" style="--sx:-26.7cqw;--sy:-7.5cqw;--sr:90deg;--hx:22.6cqw;--hy:-10.3cqw;--hr:126deg"></i><i class="g a" style="--sx:-26.7cqw;--sy:-4.5cqw;--sr:93deg;--hx:6.4cqw;--hy:30.5cqw;--hr:51deg"></i><i class="g a" style="--sx:-26.7cqw;--sy:-1.5cqw;--sr:88deg;--hx:24.2cqw;--hy:-11.6cqw;--hr:83deg"></i><i class="g a" style="--sx:-26.7cqw;--sy:1.5cqw;--sr:84deg;--hx:2.2cqw;--hy:-30.9cqw;--hr:138deg"></i><i class="g a" style="--sx:-26.7cqw;--sy:4.5cqw;--sr:83deg;--hx:-5.4cqw;--hy:-13.5cqw;--hr:157deg"></i><i class="g a" style="--sx:-26.7cqw;--sy:7.5cqw;--sr:82deg;--hx:-3.8cqw;--hy:-0.1cqw;--hr:159deg"></i><i class="g a" style="--sx:-22.9cqw;--sy:-6.0cqw;--sr:96deg;--hx:21.9cqw;--hy:5.3cqw;--hr:75deg"></i><i class="g a" style="--sx:-22.9cqw;--sy:-3.0cqw;--sr:87deg;--hx:-2.8cqw;--hy:31.6cqw;--hr:27deg"></i><i class="g a" style="--sx:-22.9cqw;--sy:0.0cqw;--sr:84deg;--hx:-0.1cqw;--hy:-20.0cqw;--hr:87deg"></i><i class="g a" style="--sx:-22.9cqw;--sy:3.0cqw;--sr:92deg;--hx:9.7cqw;--hy:-27.5cqw;--hr:75deg"></i><i class="g a" style="--sx:-22.9cqw;--sy:6.0cqw;--sr:88deg;--hx:-14.5cqw;--hy:19.5cqw;--hr:124deg"></i><i class="g a" style="--sx:-19.1cqw;--sy:-1.5cqw;--sr:90deg;--hx:-2.2cqw;--hy:11.0cqw;--hr:10deg"></i><i class="g a" style="--sx:-19.1cqw;--sy:1.5cqw;--sr:97deg;--hx:-3.5cqw;--hy:24.5cqw;--hr:144deg"></i><i class="g a" style="--sx:-15.3cqw;--sy:-3.0cqw;--sr:88deg;--hx:11.1cqw;--hy:-18.6cqw;--hr:114deg"></i><i class="g a" style="--sx:-15.3cqw;--sy:0.0cqw;--sr:82deg;--hx:-5.3cqw;--hy:-27.1cqw;--hr:29deg"></i><i class="g a" style="--sx:-15.3cqw;--sy:3.0cqw;--sr:87deg;--hx:2.0cqw;--hy:-35.5cqw;--hr:27deg"></i><i class="g a" style="--sx:-11.5cqw;--sy:-4.5cqw;--sr:83deg;--hx:12.7cqw;--hy:-22.9cqw;--hr:157deg"></i><i class="g a" style="--sx:-11.5cqw;--sy:-1.5cqw;--sr:92deg;--hx:-3.9cqw;--hy:-22.5cqw;--hr:63deg"></i><i class="g a" style="--sx:-11.5cqw;--sy:1.5cqw;--sr:88deg;--hx:-27.2cqw;--hy:-1.1cqw;--hr:179deg"></i><i class="g a" style="--sx:-11.5cqw;--sy:4.5cqw;--sr:89deg;--hx:14.9cqw;--hy:-16.1cqw;--hr:18deg"></i><i class="g a" style="--sx:-7.6cqw;--sy:-4.5cqw;--sr:87deg;--hx:-21.1cqw;--hy:3.5cqw;--hr:29deg"></i><i class="g a" style="--sx:-7.6cqw;--sy:-1.5cqw;--sr:81deg;--hx:15.8cqw;--hy:18.0cqw;--hr:26deg"></i><i class="g a" style="--sx:-7.6cqw;--sy:1.5cqw;--sr:91deg;--hx:-18.8cqw;--hy:-16.7cqw;--hr:176deg"></i><i class="g a" style="--sx:-7.6cqw;--sy:4.5cqw;--sr:97deg;--hx:16.3cqw;--hy:-1.6cqw;--hr:66deg"></i><i class="g a" style="--sx:-3.8cqw;--sy:-1.5cqw;--sr:84deg;--hx:9.0cqw;--hy:11.4cqw;--hr:140deg"></i><i class="g a" style="--sx:-3.8cqw;--sy:1.5cqw;--sr:87deg;--hx:-22.1cqw;--hy:1.3cqw;--hr:177deg"></i><i class="g a" style="--sx:0.0cqw;--sy:-7.5cqw;--sr:96deg;--hx:-0.5cqw;--hy:23.4cqw;--hr:133deg"></i><i class="g a" style="--sx:0.0cqw;--sy:-4.5cqw;--sr:85deg;--hx:6.1cqw;--hy:-4.8cqw;--hr:5deg"></i><i class="g a" style="--sx:0.0cqw;--sy:-1.5cqw;--sr:82deg;--hx:0.8cqw;--hy:-17.3cqw;--hr:125deg"></i><i class="g a" style="--sx:0.0cqw;--sy:1.5cqw;--sr:98deg;--hx:-18.4cqw;--hy:14.4cqw;--hr:178deg"></i><i class="g a" style="--sx:0.0cqw;--sy:4.5cqw;--sr:98deg;--hx:5.4cqw;--hy:-15.5cqw;--hr:41deg"></i><i class="g a" style="--sx:0.0cqw;--sy:7.5cqw;--sr:85deg;--hx:-15.7cqw;--hy:-6.4cqw;--hr:162deg"></i><i class="g a" style="--sx:3.8cqw;--sy:-7.5cqw;--sr:96deg;--hx:-6.5cqw;--hy:5.0cqw;--hr:144deg"></i><i class="g a" style="--sx:3.8cqw;--sy:-4.5cqw;--sr:83deg;--hx:-9.3cqw;--hy:21.4cqw;--hr:141deg"></i><i class="g a" style="--sx:3.8cqw;--sy:-1.5cqw;--sr:95deg;--hx:11.2cqw;--hy:-12.9cqw;--hr:142deg"></i><i class="g a" style="--sx:3.8cqw;--sy:1.5cqw;--sr:87deg;--hx:-6.4cqw;--hy:28.9cqw;--hr:71deg"></i><i class="g a" style="--sx:3.8cqw;--sy:4.5cqw;--sr:88deg;--hx:8.3cqw;--hy:25.2cqw;--hr:31deg"></i><i class="g a" style="--sx:3.8cqw;--sy:7.5cqw;--sr:83deg;--hx:-28.2cqw;--hy:2.1cqw;--hr:145deg"></i><i class="g a" style="--sx:7.6cqw;--sy:-1.5cqw;--sr:84deg;--hx:-5.8cqw;--hy:30.2cqw;--hr:118deg"></i><i class="g a" style="--sx:7.6cqw;--sy:1.5cqw;--sr:87deg;--hx:15.7cqw;--hy:-12.0cqw;--hr:3deg"></i><i class="g a" style="--sx:11.5cqw;--sy:-4.5cqw;--sr:98deg;--hx:4.6cqw;--hy:6.6cqw;--hr:168deg"></i><i class="g a" style="--sx:11.5cqw;--sy:-1.5cqw;--sr:89deg;--hx:1.7cqw;--hy:26.2cqw;--hr:38deg"></i><i class="g a" style="--sx:11.5cqw;--sy:1.5cqw;--sr:86deg;--hx:2.0cqw;--hy:-17.5cqw;--hr:106deg"></i><i class="g a" style="--sx:11.5cqw;--sy:4.5cqw;--sr:86deg;--hx:10.8cqw;--hy:-16.9cqw;--hr:164deg"></i><i class="g a" style="--sx:15.3cqw;--sy:-6.0cqw;--sr:87deg;--hx:-4.7cqw;--hy:1.6cqw;--hr:163deg"></i><i class="g a" style="--sx:15.3cqw;--sy:-3.0cqw;--sr:89deg;--hx:15.6cqw;--hy:15.7cqw;--hr:96deg"></i><i class="g a" style="--sx:15.3cqw;--sy:0.0cqw;--sr:90deg;--hx:-15.8cqw;--hy:-20.3cqw;--hr:33deg"></i><i class="g a" style="--sx:15.3cqw;--sy:3.0cqw;--sr:81deg;--hx:23.5cqw;--hy:-1.1cqw;--hr:85deg"></i><i class="g a" style="--sx:15.3cqw;--sy:6.0cqw;--sr:94deg;--hx:8.6cqw;--hy:-4.4cqw;--hr:93deg"></i><i class="g a" style="--sx:19.1cqw;--sy:-1.5cqw;--sr:91deg;--hx:25.4cqw;--hy:-4.1cqw;--hr:101deg"></i><i class="g a" style="--sx:19.1cqw;--sy:1.5cqw;--sr:85deg;--hx:-18.6cqw;--hy:1.8cqw;--hr:91deg"></i><i class="g a" style="--sx:22.9cqw;--sy:-1.5cqw;--sr:91deg;--hx:-5.7cqw;--hy:25.2cqw;--hr:80deg"></i><i class="g a" style="--sx:22.9cqw;--sy:1.5cqw;--sr:92deg;--hx:-0.2cqw;--hy:0.7cqw;--hr:125deg"></i><i class="g a" style="--sx:26.7cqw;--sy:-6.0cqw;--sr:89deg;--hx:2.1cqw;--hy:0.4cqw;--hr:169deg"></i><i class="g a" style="--sx:26.7cqw;--sy:-3.0cqw;--sr:94deg;--hx:-2.5cqw;--hy:30.7cqw;--hr:47deg"></i><i class="g a" style="--sx:26.7cqw;--sy:0.0cqw;--sr:91deg;--hx:3.9cqw;--hy:29.4cqw;--hr:25deg"></i><i class="g a" style="--sx:26.7cqw;--sy:3.0cqw;--sr:83deg;--hx:13.9cqw;--hy:-18.2cqw;--hr:43deg"></i><i class="g a" style="--sx:26.7cqw;--sy:6.0cqw;--sr:82deg;--hx:-4.3cqw;--hy:17.0cqw;--hr:161deg"></i><i class="g a" style="--sx:30.5cqw;--sy:-7.5cqw;--sr:84deg;--hx:2.1cqw;--hy:14.1cqw;--hr:26deg"></i><i class="g a" style="--sx:30.5cqw;--sy:-4.5cqw;--sr:97deg;--hx:28.0cqw;--hy:7.0cqw;--hr:171deg"></i><i class="g a" style="--sx:30.5cqw;--sy:-1.5cqw;--sr:88deg;--hx:-18.8cqw;--hy:17.9cqw;--hr:150deg"></i><i class="g a" style="--sx:30.5cqw;--sy:1.5cqw;--sr:84deg;--hx:-3.2cqw;--hy:-2.0cqw;--hr:61deg"></i><i class="g a" style="--sx:30.5cqw;--sy:4.5cqw;--sr:85deg;--hx:-15.1cqw;--hy:1.5cqw;--hr:4deg"></i><i class="g a" style="--sx:30.5cqw;--sy:7.5cqw;--sr:91deg;--hx:15.8cqw;--hy:-20.3cqw;--hr:60deg"></i><i class="g a" style="--sx:34.4cqw;--sy:-1.5cqw;--sr:92deg;--hx:16.8cqw;--hy:-15.9cqw;--hr:177deg"></i><i class="g a" style="--sx:34.4cqw;--sy:1.5cqw;--sr:95deg;--hx:32.5cqw;--hy:2.9cqw;--hr:48deg"></i><i class="g a" style="--sx:38.2cqw;--sy:-6.0cqw;--sr:82deg;--hx:19.1cqw;--hy:1.9cqw;--hr:23deg"></i><i class="g a" style="--sx:38.2cqw;--sy:-3.0cqw;--sr:89deg;--hx:3.5cqw;--hy:27.4cqw;--hr:47deg"></i><i class="g a" style="--sx:38.2cqw;--sy:0.0cqw;--sr:84deg;--hx:13.1cqw;--hy:18.4cqw;--hr:126deg"></i><i class="g a" style="--sx:38.2cqw;--sy:3.0cqw;--sr:83deg;--hx:-23.6cqw;--hy:-9.5cqw;--hr:77deg"></i><i class="g a" style="--sx:38.2cqw;--sy:6.0cqw;--sr:82deg;--hx:11.4cqw;--hy:21.5cqw;--hr:144deg"></i><i class="g a" style="--sx:42.0cqw;--sy:-7.5cqw;--sr:83deg;--hx:29.6cqw;--hy:-2.9cqw;--hr:155deg"></i><i class="g a" style="--sx:42.0cqw;--sy:-4.5cqw;--sr:89deg;--hx:-8.0cqw;--hy:-4.0cqw;--hr:167deg"></i><i class="g a" style="--sx:42.0cqw;--sy:-1.5cqw;--sr:86deg;--hx:-14.9cqw;--hy:-12.9cqw;--hr:43deg"></i><i class="g a" style="--sx:42.0cqw;--sy:1.5cqw;--sr:83deg;--hx:4.2cqw;--hy:-29.5cqw;--hr:36deg"></i><i class="g a" style="--sx:42.0cqw;--sy:4.5cqw;--sr:87deg;--hx:-17.0cqw;--hy:2.4cqw;--hr:52deg"></i><i class="g a" style="--sx:42.0cqw;--sy:7.5cqw;--sr:90deg;--hx:-6.3cqw;--hy:-17.8cqw;--hr:3deg"></i>
+        <i class="slab a"></i><i class="d a" style="--dx:0.0000;--dy:-1.4142;--tx:-21.00cqw;--ty:-24cqw;--kx:1.895;--ky:0.274"></i><i class="d a" style="--dx:0.7071;--dy:-0.7071;--tx:-15.00cqw;--ty:-17.4cqw;--kx:2.526;--ky:0.126"></i><i class="d a" style="--dx:-0.7071;--dy:-0.7071;--tx:-28.00cqw;--ty:-9.5cqw;--kx:1.158;--ky:0.168"></i><i class="d a" style="--dx:1.4142;--dy:0.0000;--tx:-9.80cqw;--ty:-4cqw;--kx:2.737;--ky:0.137"></i><i class="d a" style="--dx:0.0000;--dy:0.0000;--tx:-6.80cqw;--ty:1.4cqw;--kx:3.053;--ky:0.137"></i><i class="d a" style="--dx:-1.4142;--dy:0.0000;--tx:-25.50cqw;--ty:9.5cqw;--kx:1.421;--ky:0.168"></i><i class="d a" style="--dx:0.7071;--dy:0.7071;--tx:-12.30cqw;--ty:15cqw;--kx:2.316;--ky:0.137"></i><i class="d a" style="--dx:-0.7071;--dy:0.7071;--tx:-6.30cqw;--ty:20.4cqw;--kx:2.947;--ky:0.137"></i><i class="d a" style="--dx:0.0000;--dy:1.4142;--tx:-10.30cqw;--ty:25.8cqw;--kx:2.526;--ky:0.137"></i>
+        <div class="cuts c1"><i class="a"></i><i class="a"></i></div>
+        <div class="cuts c2"><i class="a"></i><i class="a"></i></div>
+        <div class="win a"></div>
+        <div class="lines a">
+          <span class="ln t">Design sync</span>
+          <span class="ln m">Fri 13 Nov · 31 min · Priya, Tom</span>
+          <span class="ln h" style="top:40.5cqw">Decisions</span>
+          <span class="ln b" style="top:46cqw">Ship onboarding v2 behind a flag</span>
+          <span class="ln b" style="top:51.4cqw">Keep the old empty states until Friday</span>
+          <span class="ln h" style="top:59.5cqw">Action items</span>
+          <span class="ln c done" style="top:65cqw">Tom: share the flag name</span>
+          <span class="ln c" style="top:70.4cqw">Priya: finish the empty states by Friday</span>
+          <span class="ln c" style="top:75.8cqw">You: send the follow-up email</span>
+          <span class="ln by"><b>✦</b> Written by claude:haiku from your notes and the transcript</span>
+        </div>
+        <div class="chili a"></div>
+      </div>
+      <div class="story-copy">
+        <p class="eyebrow">How it works</p>
+        <h2 id="h-how">From everything said to a few neat pieces.</h2>
+        <ol class="beats">
+          <li class="beat a"><span class="beat-k">Loose grains: the meeting as it happens</span><h3>Start the meeting, or let your calendar do it</h3>
+            <p>Milkrice reads the calendars already on your Mac. It can nudge you when a meeting begins or start on its own, and it notices unscheduled Zoom, Teams, Webex, Slack and FaceTime calls. When the meeting is over and the room goes quiet, it stops.</p></li>
+          <li class="beat a"><span class="beat-k">Pressed flat: transcribed on your Mac</span><h3>Jot down what matters</h3>
+            <p>Write as much or as little as you like. Milkrice hears your microphone and the call audio, and transcribes both live on your Mac, telling the speakers apart as it goes.</p></li>
+          <li class="beat a"><span class="beat-k">Cut in diamonds: the write-up</span><h3>Get the full write-up</h3>
+            <p>Afterwards, Milkrice expands your notes with detail from the transcript, using a template that fits the meeting: a 1:1, a stand-up, a customer call, an interview. Then ask it for what you need next, like the follow-up email.</p></li>
+          <li class="beat a"><span class="beat-k">Served: notes that are yours</span><h3>Keep it, change it, find it again</h3>
+            <p>The write-up is yours to edit. Action items tick off, and the note says which model wrote it. Search every note and transcript, ask questions across meetings, or export any note as Markdown.</p></li>
         </ol>
-        <figure class="figure">
-          <img class="illus" src="assets/onboarding.webp" alt="Pencil sketch of a desk microphone beside a desk calendar and a speech bubble." width="960" height="640" loading="lazy" decoding="async">
-        </figure>
+        <div class="pips" aria-hidden="true"><i class="a"></i><i class="a"></i><i class="a"></i><i class="a"></i></div>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <section class="sec" id="privacy" aria-labelledby="h-privacy">
-      <h2 class="sec-h" id="h-privacy">Where your words go</h2>
-      <div class="sec-body">
-        <p class="big">Your audio never leaves your Mac. When Milkrice writes up a meeting, only the text goes out, and only to the AI you chose.</p>
-        <div class="flow" role="img" aria-label="Diagram: microphone and call audio go to a speech model on your Mac, which writes a transcript stored locally. When notes are written, only the text is sent: to Claude Code or Codex under your own account, or to Ollama on your Mac.">
-          <div class="mac">
-            <span class="mac-label">Your Mac</span>
-            <div class="nodes">
-              <div class="node"><strong>Mic and call audio</strong><span>Heard live, kept in memory</span></div>
-              <i class="arrow"></i>
-              <div class="node"><strong>Speech model</strong><span>Parakeet, Whisper and others, run on device</span></div>
-              <i class="arrow"></i>
-              <div class="node"><strong>Transcript and notes</strong><span>In a local database in your Library folder</span></div>
-            </div>
-            <p class="stays">Recordings are off unless you turn them on.</p>
+  <section class="sec band" id="privacy" aria-labelledby="h-privacy">
+    <div class="wrap">
+      <div class="sec-h rv">
+        <p class="eyebrow">Where your words go</p>
+        <h2 id="h-privacy">Your audio never leaves your Mac.</h2>
+        <p>When Milkrice writes up a meeting, only the text goes out, and only to the AI you chose.</p>
+      </div>
+      <div class="flow rv" role="img" aria-label="Diagram: microphone and call audio go to a speech model on your Mac, which writes a transcript stored locally. When notes are written, only the text is sent: to Claude Code or Codex under your own account, or to Ollama on your Mac.">
+        <div class="mac">
+          <span class="mac-label">Your Mac</span>
+          <div class="nodes">
+            <div class="node"><strong>Mic and call audio</strong><span>Heard live, kept in memory</span></div>
+            <i class="arrow"></i>
+            <div class="node"><strong>Speech model</strong><span>Parakeet, Whisper and others, run on device</span></div>
+            <i class="arrow"></i>
+            <div class="node"><strong>Transcript and notes</strong><span>In a local database in your Library folder</span></div>
           </div>
-          <div class="out">
-            <div class="out-branch">
-              <span class="tag">To write up notes: text only</span>
-              <div class="node"><strong>Claude Code or Codex</strong><span>Your own account and its terms</span></div>
-            </div>
-            <div class="out-branch local">
-              <span class="tag">Or keep it local</span>
-              <div class="node"><strong>Ollama</strong><span>Runs on your Mac, nothing sent</span></div>
-            </div>
+          <p class="stays">Recordings are off unless you turn them on.</p>
+        </div>
+        <div class="out">
+          <div class="out-branch">
+            <span class="tag">To write up notes: text only</span>
+            <strong>Claude Code or Codex</strong><span class="d2">Your own account and its terms</span>
+          </div>
+          <div class="out-branch local">
+            <span class="tag">Or keep it local</span>
+            <strong>Ollama</strong><span class="d2">Runs on your Mac, nothing sent</span>
           </div>
         </div>
-        <ul class="facts">
-          <li>No account, no analytics, no telemetry. We don't run a server for Milkrice to talk to.</li>
-          <li>The other network traffic is a one-time download of the speech model you choose, and any calendar feed address you add yourself.</li>
-          <li>Everything lives in <span class="path">~/Library/<wbr>Application&nbsp;Support/<wbr>Milkrice</span>. Delete the folder and it's gone.</li>
-        </ul>
-        <p style="margin-top:18px"><a href="privacy.html">Read the privacy policy</a></p>
       </div>
-    </section>
+      <ul class="facts rv">
+        <li>No account, no analytics, no telemetry. We don't run a server for Milkrice to talk to.</li>
+        <li>The other network traffic is a one-time download of the speech model you choose, a check for new releases on GitHub, and any calendar feed address you add yourself.</li>
+        <li>Everything lives in <span class="path">~/Library/<wbr>Application&nbsp;Support/<wbr>Milkrice</span>. Delete the folder and it's gone.</li>
+      </ul>
+      <p class="more"><a href="privacy.html">Read the privacy policy</a></p>
+    </div>
+  </section>
 
-    <section class="sec" id="features" aria-labelledby="h-features">
-      <h2 class="sec-h" id="h-features">What's inside</h2>
-      <div class="sec-body">
-        <dl class="feats">
-          <div><dt>Open speech models</dt><dd>Parakeet, Whisper, Canary, Moonshine, SenseVoice and Cohere Transcribe. Download one once. English-only or up to 99 languages; Parakeet runs about 19 times faster than real time on a MacBook Air.</dd></div>
-          <div><dt>Knows who's speaking</dt><dd>A local voice model separates the people on the call. Names come from the invite and from the conversation itself, and you can rename or merge speakers with a click.</dd></div>
-          <div><dt>Three kinds of text, kept apart</dt><dd>What you typed, what the AI wrote and what was said are stored and shown separately, each labelled with who or what produced it.</dd></div>
-          <div><dt>The AI you already pay for</dt><dd>Claude Haiku through Claude Code, or Luna through Codex, using the subscription you're signed into. No API keys. Or stay fully offline with Ollama.</dd></div>
-          <div><dt>No bot in your meeting</dt><dd>Milkrice listens through your Mac, so nobody sees a note-taker join. Telling people you're taking notes is still up to you.</dd></div>
-          <div><dt>Search, ask and export</dt><dd>Search every note and transcript, ask questions across meetings, and export any note as Markdown.</dd></div>
-          <div><dt>Recordings, only if you want them</dt><dd>Off by default. Turn them on to replay a moment; they're deleted after 30 days unless you choose otherwise.</dd></div>
-          <div><dt>Quiet between meetings</dt><dd>About 100 MB of memory and close to zero CPU while idle.</dd></div>
-        </dl>
+  <section class="sec" id="features" aria-labelledby="h-features">
+    <div class="wrap">
+      <div class="sec-h rv">
+        <p class="eyebrow">What's inside</p>
+        <h2 id="h-features">A quiet notetaker, with nothing held back.</h2>
       </div>
-    </section>
+      <figure class="shot rv">
+        <img src="assets/app-note.webp" alt="The Milkrice window: a list of meetings on the left, and a note titled Beta launch sync with AI-written decisions and action items, the user's own notes below, and a recorder bar at the bottom." width="2240" height="1440" loading="lazy" decoding="async">
+        <figcaption>A note after the meeting. The write-up says which model wrote it, and your own jottings sit underneath.</figcaption>
+      </figure>
+      <dl class="feats">
+        <div class="rv"><dt>Open speech models</dt><dd>Parakeet, Whisper, Canary, Moonshine, SenseVoice and Cohere Transcribe. Download one once. English-only or up to 99 languages; Parakeet runs about 19 times faster than real time on a MacBook Air.</dd></div>
+        <div class="rv"><dt>Knows who's speaking</dt><dd>A local voice model separates the people on the call. Names come from the invite and from the conversation itself, and you can rename or merge speakers with a click.</dd></div>
+        <div class="rv"><dt>Three kinds of text, kept apart</dt><dd>What you typed, what the AI wrote and what was said are stored and shown separately, each labelled with who or what produced it.</dd></div>
+        <div class="rv"><dt>No bot in your meeting</dt><dd>Milkrice listens through your Mac, so nobody sees a note-taker join. Telling people you're taking notes is still up to you.</dd></div>
+        <div class="rv"><dt>Search, ask and export</dt><dd>Search every note and transcript, ask questions across meetings, and export any note as Markdown.</dd></div>
+        <div class="rv"><dt>Hooks into your calendar</dt><dd>Reads the calendars already synced to macOS. Get a nudge as a meeting starts, or let it record automatically, with a one-click way to turn that off.</dd></div>
+        <div class="rv"><dt>Recordings, only if you want them</dt><dd>Off by default. Turn them on to replay a moment; they're deleted after 30 days unless you choose otherwise.</dd></div>
+        <div class="rv"><dt>Quiet between meetings</dt><dd>About 100 MB of memory and close to zero CPU while idle.</dd></div>
+      </dl>
+    </div>
+  </section>
 
-    <section class="sec" id="agents" aria-labelledby="h-agents">
-      <h2 class="sec-h" id="h-agents">For your agents</h2>
-      <div class="sec-body">
-        <p class="big">Your meetings are context your coding agents can use.</p>
+  <section class="sec tint" id="ai" aria-labelledby="h-ai">
+    <div class="wrap">
+      <div class="sec-h rv">
+        <p class="eyebrow">Bring your own AI</p>
+        <h2 id="h-ai">The AI you already pay for writes the notes.</h2>
+        <p>Milkrice runs the command-line tool you're already signed into, on your own subscription. No API keys, and nothing of ours in the middle. Pick one during setup; until you do, nothing is sent anywhere.</p>
+      </div>
+      <div class="cards">
+        <article class="card rv"><span class="k">Your Claude account</span><h3>Claude Code</h3>
+          <p>Claude Haiku by default, through the <code>claude</code> command you installed. Tools are turned off and the session isn't saved.</p>
+          <span class="cmd">text goes to Anthropic, under your account</span></article>
+        <article class="card rv"><span class="k">Your ChatGPT account</span><h3>Codex</h3>
+          <p>Luna through the <code>codex</code> command you installed, in a read-only sandbox with an ephemeral session.</p>
+          <span class="cmd">text goes to OpenAI, under your account</span></article>
+        <article class="card local rv"><span class="k">Fully offline</span><h3>Ollama</h3>
+          <p>A model you've pulled, running on your own Mac. Milkrice talks to it at <span class="path">127.0.0.1</span> and nothing leaves your computer.</p>
+          <span class="cmd">nothing sent</span></article>
+      </div>
+      <p class="aside-note rv">Transcription doesn't need any of them. It always runs on your Mac.</p>
+    </div>
+  </section>
+
+  <section class="sec" id="agents" aria-labelledby="h-agents">
+    <div class="wrap split">
+      <div class="rv">
+        <div class="sec-h" style="margin-bottom:22px">
+          <p class="eyebrow">For your agents</p>
+          <h2 id="h-agents">Your meetings are context your coding agents can use.</h2>
+        </div>
         <p>Milkrice includes a <code>milkrice</code> command, an MCP server and a skill for Claude Code and Codex. Connect them from Settings, Agents. Access is read-only, and every passage carries a label, so an agent never mistakes a model's summary for something you wrote.</p>
-        <div class="term" role="region" aria-label="Example terminal session" tabindex="0">
-          <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+        <ul class="labels" aria-label="Content labels">
+          <li><b>NOTES</b>what you typed</li>
+          <li><b>AI SUMMARY</b>written by a named model</li>
+          <li><b>TRANSCRIPT</b>speech-to-text, your lines marked</li>
+        </ul>
+      </div>
+      <div class="term rv" role="region" aria-label="Example terminal session" tabindex="0">
+        <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
 <pre><span class="p">$</span> milkrice ls --since 7d
 <span class="c">id       date             len   title · people [content]</span>
 9f2c41ab  2026-11-13 10:00   31m Design sync · Priya, Tom [notes ai tx:212]
@@ -143,52 +217,108 @@
 Priya will finish the empty states by Friday…
 
 <span class="p">$</span> milkrice mcp        <span class="c"># list_meetings, get_meeting, get_transcript, search</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec tint" id="obsidian" aria-labelledby="h-obsidian">
+    <div class="wrap split flip">
+      <div class="rv">
+        <div class="sec-h" style="margin-bottom:22px">
+          <p class="eyebrow">Obsidian and plain Markdown</p>
+          <h2 id="h-obsidian">Every meeting, a file in your vault.</h2>
         </div>
-        <ul class="labels" aria-label="Content labels">
-          <li><b>NOTES</b>what you typed</li>
-          <li><b>AI SUMMARY</b>written by a named model</li>
-          <li><b>TRANSCRIPT</b>speech-to-text, your lines marked</li>
+        <p>Point Milkrice at an Obsidian vault, or any folder, and it mirrors each meeting there as plain Markdown with YAML front matter. One file per meeting, kept up to date as the note changes.</p>
+        <ul class="ticks">
+          <li>The summary, your own notes and the transcript, each under its own heading.</li>
+          <li>Attendees and named speakers as <code>[[links]]</code>, and the date linked to your daily note.</li>
+          <li>Milkrice only rewrites its own block. Anything you add above or below it is never touched.</li>
         </ul>
       </div>
-    </section>
+      <figure class="file rv" aria-label="Example of an exported Markdown note">
+        <div class="file-tab">Meetings/Design sync.md</div>
+<pre><span class="y">---
+title: Design sync
+date: 2026-11-13
+duration_min: 31
+attendees: ["[[Priya]]", "[[Tom]]"]
+tags: [meeting, milkrice]
+summary_by: claude:haiku
+---</span>
+<span class="mk">&lt;!-- milkrice:start --&gt;</span>
+<span class="hd"># Design sync</span>
+<span class="wl">[[2026-11-13]]</span> · 10:00 · 31 min · with <span class="wl">[[Priya]]</span>, <span class="wl">[[Tom]]</span>
 
-    <section class="sec" id="faq" aria-labelledby="h-faq">
-      <h2 class="sec-h" id="h-faq">Questions</h2>
-      <div class="sec-body">
-        <div class="faq">
-          <details><summary>Do I need to tell people I'm transcribing?</summary><div>
-            <p>Very likely, yes. Many places require the consent of everyone on a call before it is recorded or transcribed, and workplaces often have their own rules. Milkrice doesn't add a bot or announce itself, so letting people know is your responsibility. <a href="consent.html">A short note on recording consent</a>.</p></div></details>
-          <details><summary>What do I need to run it?</summary><div>
-            <p>macOS 14.2 or later. Apple Silicon is recommended; speech models run on the CPU and Whisper can use Metal. Speech models take between about 55 MB and 1.7 GB of disk, depending on which you choose.</p>
-            <p>For written notes you need one of: Claude Code or Codex installed and signed in, or Ollama with a model pulled. Transcription works without any of them.</p></div></details>
-          <details><summary>Does anything go to the cloud?</summary><div>
-            <p>Audio, never. After a meeting (automatically, unless you turn that off in Settings) and whenever you ask a question, Milkrice sends the meeting's text, meaning the transcript, your notes, the title and attendee names, to the AI you chose, through that provider's own command-line tool. If you chose Ollama, it stays on your Mac. The <a href="privacy.html">privacy policy</a> has the details.</p></div></details>
-          <details><summary>Which languages work?</summary><div>
-            <p>It depends on the model. Parakeet v2 and Moonshine are English-only, Parakeet v3 and Canary 1B cover 25 European languages, SenseVoice handles Chinese, Cantonese, English, Japanese and Korean, and Whisper covers 99.</p></div></details>
-          <details><summary>Is it open source?</summary><div>
-            <p>Yes. Milkrice is open source under the MIT License, so you can read every line that touches your audio, build it yourself, and fork it. <a href="license.html">More on the license</a>.</p></div></details>
-          <details><summary>How do I remove everything?</summary><div>
-            <p>Quit Milkrice and delete <span class="path">~/Library/<wbr>Application&nbsp;Support/<wbr>Milkrice</span>. That folder holds your notes, transcripts, any recordings and the downloaded models.</p></div></details>
+<span class="hd">## Summary</span>
+Priya will finish the empty states by Friday…
+
+<span class="hd">## My notes</span>
+- ship onboarding v2 behind flag
+<span class="mk">&lt;!-- milkrice:end --&gt;</span>
+
+Your own thoughts go here. They stay put.</pre>
+      </figure>
+    </div>
+  </section>
+
+  <section class="sec" id="open" aria-labelledby="h-open">
+    <div class="wrap oss">
+      <div class="rv">
+        <p class="eyebrow">Open source</p>
+        <h2 class="big" id="h-open" style="margin-top:18px">Read every line that touches your audio.</h2>
+      </div>
+      <div class="oss-meta rv">
+        <p>Milkrice is open source under the MIT License, written in Rust. Build it yourself, fork it, or just check that it does what this page says.</p>
+        <div class="cta" style="margin-top:6px">
+          <a class="btn btn-line" href="https://github.com/thekindofme/milkrice">View source on GitHub</a>
+          <a class="link-quiet" href="license.html">More on the license</a>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <section class="sec end" aria-labelledby="h-end">
-      <h2 class="sec-h" id="h-end">Try it</h2>
-      <div class="sec-body">
-        <p class="big">Bring it to your next meeting.</p>
-        <div class="cta">
-          <a class="btn" href="https://github.com/thekindofme/milkrice/releases/latest">
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10M5.5 8.8 10 13.2l4.5-4.4M4 16.5h12"/></svg>
-            Download for macOS
-          </a>
-          <a class="link-quiet" href="https://github.com/thekindofme/milkrice">View source on GitHub</a>
-        </div>
+  <section class="sec tint" id="faq" aria-labelledby="h-faq">
+    <div class="wrap">
+      <div class="sec-h rv">
+        <p class="eyebrow">Questions</p>
+        <h2 id="h-faq">Before you bring it to a meeting.</h2>
       </div>
-    </section>
-  </main>
+      <div class="faq rv">
+        <details><summary>Do I need to tell people I'm transcribing?</summary><div>
+          <p>Very likely, yes. Many places require the consent of everyone on a call before it is recorded or transcribed, and workplaces often have their own rules. Milkrice doesn't add a bot or announce itself, so letting people know is your responsibility. <a href="consent.html">A short note on recording consent</a>.</p></div></details>
+        <details><summary>What do I need to run it?</summary><div>
+          <p>An Apple Silicon Mac with macOS 14.2 or later. Speech models run on the CPU and Whisper can use Metal. They take between about 55 MB and 1.7 GB of disk, depending on which you choose.</p>
+          <p>For written notes you need one of: Claude Code or Codex installed and signed in, or Ollama with a model pulled. Transcription works without any of them.</p></div></details>
+        <details><summary>How do I install it?</summary><div>
+          <p>Download the DMG from the <a href="https://github.com/thekindofme/milkrice/releases/latest">latest release</a>, open it and drag Milkrice to Applications. Or use Homebrew: <code>brew install --cask thekindofme/tap/milkrice</code>.</p>
+          <p>On first launch, Milkrice asks for the microphone, calendars and "Screen &amp; System Audio Recording". The last one is how it hears the other people on a call; your screen is never captured.</p></div></details>
+        <details><summary>Does anything go to the cloud?</summary><div>
+          <p>Audio, never. After a meeting (automatically, unless you turn that off in Settings) and whenever you ask a question, Milkrice sends the meeting's text, meaning the transcript, your notes, the title and attendee names, to the AI you chose, through that provider's own command-line tool. If you chose Ollama, it stays on your Mac. The <a href="privacy.html">privacy policy</a> has the details.</p></div></details>
+        <details><summary>Which languages work?</summary><div>
+          <p>It depends on the model. Parakeet v2 and Moonshine are English-only, Parakeet v3 and Canary 1B cover 25 European languages, SenseVoice handles Chinese, Cantonese, English, Japanese and Korean, and Whisper covers 99.</p></div></details>
+        <details><summary>Is it open source?</summary><div>
+          <p>Yes. Milkrice is open source under the MIT License, so you can read every line that touches your audio, build it yourself, and fork it. <a href="license.html">More on the license</a>.</p></div></details>
+        <details><summary>How do I remove everything?</summary><div>
+          <p>Quit Milkrice and delete <span class="path">~/Library/<wbr>Application&nbsp;Support/<wbr>Milkrice</span>. That folder holds your notes, transcripts, any recordings and the downloaded models.</p></div></details>
+      </div>
+    </div>
+  </section>
 
-  <footer class="foot">
+  <section class="sec end" aria-labelledby="h-end">
+    <div class="wrap">
+      <div class="mark rv" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <h2 id="h-end" class="rv">Bring it to your next meeting.</h2>
+      <div class="cta rv">
+        <a class="btn" href="https://github.com/thekindofme/milkrice/releases/latest"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10M5.5 8.8 10 13.2l4.5-4.4M4 16.5h12"/></svg>Download for macOS</a>
+        <span class="brew"><code id="brew2">brew install --cask thekindofme/tap/milkrice</code><button type="button" data-copy="brew2" aria-label="Copy the Homebrew command">Copy</button></span>
+      </div>
+      <p class="req">Apple Silicon, macOS 14.2 or later.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
     <a class="brand" href="./"><img src="assets/app-icon.webp" alt="" width="22" height="22" loading="lazy">Milkrice</a>
     <div class="foot-body">
       <nav aria-label="Legal">
@@ -197,12 +327,13 @@ Priya will finish the empty states by Friday…
         <a href="license.html">License</a>
         <a href="acknowledgements.html">Acknowledgements</a>
         <a href="consent.html">Recording consent</a>
+        <a href="https://github.com/thekindofme/milkrice">GitHub</a>
       </nav>
       <p>This site has no cookies, analytics or trackers, so there's nothing to accept.</p>
       <p>Claude, Codex, Ollama, Zoom and other names are trademarks of their owners and are used here only to say what Milkrice works with.</p>
     </div>
-  </footer>
-</div>
-<script src="js/art.js" defer></script>
+  </div>
+</footer>
+<script src="js/site.js?v=2" defer></script>
 </body>
 </html>
