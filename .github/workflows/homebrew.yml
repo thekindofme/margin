@@ -1,0 +1,59 @@
+name: Update Homebrew cask
+
+# Runs when a release is published (the release workflow only creates a draft, so the DMG
+# URL is not live until you click Publish). Updates version + sha256 in the tap.
+# Skips quietly when HOMEBREW_TAP_TOKEN is not configured.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, e.g. v0.1.0"
+        required: true
+
+jobs:
+  cask:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+    steps:
+      - name: Check token
+        id: gate
+        run: |
+          if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
+            echo "::warning::HOMEBREW_TAP_TOKEN not set; skipping cask update"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compute DMG checksum
+        if: steps.gate.outputs.run == 'true'
+        id: dmg
+        run: |
+          version="${TAG#v}"
+          curl -fsSL -o margin.dmg "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/Margin_${version}_aarch64.dmg"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha=$(sha256sum margin.dmg | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          repository: thekindofme/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Update cask and push
+        if: steps.gate.outputs.run == 'true'
+        working-directory: tap
+        run: |
+          sed -i -E 's/^(  version ")[^"]*(")/\1${{ steps.dmg.outputs.version }}\2/' Casks/margin.rb
+          sed -i -E 's/^(  sha256 ")[^"]*(")/\1${{ steps.dmg.outputs.sha }}\2/' Casks/margin.rb
+          git diff --stat
+          if git diff --quiet; then echo "Cask already up to date"; exit 0; fi
+          git config user.name "margin-release-bot"
+          git config user.email "margin-release-bot@users.noreply.github.com"
+          git commit -am "margin ${{ steps.dmg.outputs.version }}"
+          git push

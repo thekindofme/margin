@@ -1,0 +1,159 @@
+name: Release
+
+# Push a tag like v0.1.0 to build a draft GitHub release (DMG, updater bundle + signature,
+# latest.json, SHA256SUMS.txt). Signing + notarization switch on automatically when the
+# Apple secrets exist; otherwise an unsigned test build is produced. See docs/RELEASING.md.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check tag matches app version
+        run: |
+          v=$(sed -n 's/.*"version": "\(.*\)".*/\1/p' src-tauri/tauri.conf.json | head -1)
+          if [ "v$v" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match tauri.conf.json version $v" >&2
+            exit 1
+          fi
+
+      - name: Cache tauri-cli
+        id: tauri-cli
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-tauri
+          key: tauri-cli-2.11-${{ runner.os }}-${{ runner.arch }}
+      - name: Install tauri-cli
+        if: steps.tauri-cli.outputs.cache-hit != 'true'
+        run: cargo install tauri-cli --version "~2.11" --locked
+
+      - name: Detect signing secrets
+        id: detect
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -n "$APPLE_CERTIFICATE" ] && [ -n "$APPLE_CERTIFICATE_PASSWORD" ] && [ -n "$APPLE_SIGNING_IDENTITY" ]; then
+            echo "sign=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Apple signing secrets missing: building an UNSIGNED test build"
+          fi
+          if [ -n "$APPLE_API_KEY" ] && [ -n "$APPLE_API_ISSUER" ] && [ -n "$APPLE_API_KEY_P8" ]; then
+            echo "notarize=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "notarize=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "updater=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "updater=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::TAURI_SIGNING_PRIVATE_KEY missing: no updater artifacts will be produced"
+          fi
+
+      - name: Import signing certificate into a temporary keychain
+        if: steps.detect.outputs.sign == 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          kc="$RUNNER_TEMP/margin-build.keychain-db"
+          kcpw=$(uuidgen)
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$kcpw" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$kcpw" "$kc"
+          security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$kcpw" "$kc"
+          security list-keychains -d user -s "$kc" login.keychain-db
+          rm -f "$RUNNER_TEMP/cert.p12"
+          # Only set when signing: an empty value would make tauri try (and fail) to sign.
+          echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Prepare notarization key
+        if: steps.detect.outputs.sign == 'true' && steps.detect.outputs.notarize == 'true'
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          echo "$APPLE_API_KEY_P8" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          {
+            echo "APPLE_API_KEY=$APPLE_API_KEY"
+            echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
+            echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8"
+          } >> "$GITHUB_ENV"
+
+      - name: Compose release notes
+        id: notes
+        run: |
+          {
+            echo 'body<<EOF'
+            if [ "${{ steps.detect.outputs.sign }}" = "true" ] && [ "${{ steps.detect.outputs.notarize }}" = "true" ]; then
+              echo "Margin ${GITHUB_REF_NAME#v}. Signed and notarized. Apple Silicon, macOS 14.2 or later."
+            elif [ "${{ steps.detect.outputs.sign }}" = "true" ]; then
+              echo "Margin ${GITHUB_REF_NAME#v}. Signed but NOT notarized. Apple Silicon, macOS 14.2 or later."
+            else
+              echo "Unsigned test build. macOS will refuse to open it without right-click > Open; do not distribute."
+            fi
+            echo
+            echo "See CHANGELOG.md for what changed. SHA-256 sums are in SHA256SUMS.txt."
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Disable updater artifacts (no updater key)
+        if: steps.detect.outputs.updater != 'true'
+        run: echo '{"bundle":{"createUpdaterArtifacts":false}}' > "$RUNNER_TEMP/no-updater.json"
+
+      # Tauri's beforeBuildCommand builds margin-cli in release first; the bundle embeds it.
+      - name: Build and draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tauriScript: cargo tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: Margin ${{ github.ref_name }}
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: true
+          prerelease: false
+          uploadUpdaterJson: ${{ steps.detect.outputs.updater }}
+          args: >-
+            --bundles app,dmg
+            ${{ steps.detect.outputs.updater != 'true' && format('--config {0}/no-updater.json', runner.temp) || '' }}
+
+      - name: Checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd target/release/bundle
+          shasum -a 256 dmg/*.dmg macos/*.tar.gz 2>/dev/null | sed 's#  [a-z]*/#  #' > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          gh release upload "$GITHUB_REF_NAME" SHA256SUMS.txt --clobber --repo "$GITHUB_REPOSITORY"
+
+      - name: Clean up keychain
+        if: always() && steps.detect.outputs.sign == 'true'
+        run: |
+          security delete-keychain "$RUNNER_TEMP/margin-build.keychain-db" || true
+          rm -f "$RUNNER_TEMP/AuthKey.p8"
