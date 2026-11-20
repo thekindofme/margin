@@ -1,6 +1,6 @@
-# Contributing to Margin
+# Contributing to Milkrice
 
-Thanks for helping. Margin is a Rust + Tauri v2 macOS app: the engine lives in `crates/margin-core`, the desktop shell in `src-tauri`, and the UI in `ui` (plain HTML/CSS/JS, no build step).
+Thanks for helping. Milkrice is a Rust + Tauri v2 macOS app: the engine lives in `crates/milkrice-core`, the desktop shell in `src-tauri`, and the UI in `ui` (plain HTML/CSS/JS, no build step).
 
 ## Prerequisites
 
@@ -13,7 +13,7 @@ Thanks for helping. Margin is a Rust + Tauri v2 macOS app: the engine lives in `
 
 ```bash
 scripts/build-local.sh
-open target/release/bundle/macos/Margin.app
+open target/release/bundle/macos/Milkrice.app
 ```
 
 The script runs `cargo tauri build --bundles app`. macOS ties privacy grants (microphone, calendars, screen and system audio) to the app's code signature, so an ad-hoc build asks again after every rebuild. To avoid that, create a self-signed code-signing certificate in Keychain Access and put its name in `src-tauri/tauri.local.conf.json` (git-ignored):
@@ -35,27 +35,27 @@ CI runs both on every pull request. Please don't add new clippy warnings.
 
 ## Headless tools
 
-`margin-cli` runs the engine without the UI:
+`milkrice-cli` runs the engine without the UI:
 
 ```bash
-cargo run --release -p margin-core --bin margin-cli -- models
-cargo run --release -p margin-core --bin margin-cli -- simulate parakeet-v2 mic.wav system.wav claude
+cargo run --release -p milkrice-core --bin milkrice-cli -- models
+cargo run --release -p milkrice-core --bin milkrice-cli -- simulate parakeet-v2 mic.wav system.wav claude
 ```
 
 `simulate` streams two 16 kHz mono WAVs (mic and call audio) through the live pipeline, then names speakers, writes notes and answers a question. Run it without arguments for the full list of `dev` subcommands.
 
-Set `MARGIN_HOME=/some/dir` to point Margin at a throwaway data directory instead of `~/Library/Application Support/Margin`.
+Set `MILKRICE_HOME=/some/dir` to point Milkrice at a throwaway data directory instead of `~/Library/Application Support/Milkrice`.
 
 ### End-to-end self-test hooks
 
 These run the real app binary with test audio in place of live devices (see the README for details):
 
 ```bash
-MARGIN_SELFTEST=dir/ target/release/margin
-MARGIN_TEST_EVENT=50 MARGIN_QUIET_SECS=15 MARGIN_TEST_AUDIO=dir/ target/release/margin
+MILKRICE_SELFTEST=dir/ target/release/milkrice
+MILKRICE_TEST_EVENT=50 MILKRICE_QUIET_SECS=15 MILKRICE_TEST_AUDIO=dir/ target/release/milkrice
 ```
 
-`dir/` holds `mic.wav` and `system.wav`. `MARGIN_SELFTEST_MODEL` picks the speech model (default `parakeet-v2`; it must already be downloaded).
+`dir/` holds `mic.wav` and `system.wav`. `MILKRICE_SELFTEST_MODEL` picks the speech model (default `parakeet-v2`; it must already be downloaded).
 
 ## Pull requests
 

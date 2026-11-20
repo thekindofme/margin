@@ -6,6 +6,6 @@ labels: enhancement
 
 **What problem are you trying to solve?**
 
-**What would you like Margin to do?**
+**What would you like Milkrice to do?**
 
 **Alternatives you've considered**

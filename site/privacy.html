@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<link rel="canonical" href="https://margin.yasithfernando.com/privacy.html">
+<link rel="canonical" href="https://milkrice.yasithfernando.com/privacy.html">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Privacy — Margin</title>
-<meta name="description" content="Margin collects nothing. What the app stores on your Mac, and the few times information leaves it.">
+<title>Privacy — Milkrice</title>
+<meta name="description" content="Milkrice collects nothing. What the app stores on your Mac, and the few times information leaves it.">
 <meta name="theme-color" content="#f3efe6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#161514" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="assets/favicon.png" type="image/png">
@@ -19,13 +19,13 @@
 <div class="page">
   <div class="rule" aria-hidden="true"></div>
   <header class="top">
-    <a class="brand" href="./"><img src="assets/app-icon.webp" alt="" width="30" height="30">Margin</a>
+    <a class="brand" href="./"><img src="assets/app-icon.webp" alt="" width="30" height="30">Milkrice</a>
     <nav class="nav" aria-label="Site">
       <a href="./#how">How it works</a>
       <a href="./#privacy">Privacy</a>
       <a href="./#agents">Agents</a>
       <a href="./#faq">FAQ</a>
-      <a href="https://github.com/thekindofme/margin">GitHub</a>
+      <a href="https://github.com/thekindofme/milkrice">GitHub</a>
     </nav>
   </header>
   <main id="main" class="doc">
@@ -41,62 +41,62 @@
     <article class="doc-body">
       <h1>Privacy</h1>
       <p class="updated">Last updated 16 November 2026</p>
-      <div class="note"><p><strong>The short version.</strong> We don't collect anything. Margin has no account, no telemetry, no analytics and no server of ours. Your notes, transcripts and audio stay on your Mac. Text leaves your Mac only when Margin asks the AI provider you chose to write something, and that goes to the provider under your own account.</p></div>
+      <div class="note"><p><strong>The short version.</strong> We don't collect anything. Milkrice has no account, no telemetry, no analytics and no server of ours. Your notes, transcripts and audio stay on your Mac. Text leaves your Mac only when Milkrice asks the AI provider you chose to write something, and that goes to the provider under your own account.</p></div>
 
       <h2>What we collect</h2>
-      <p>Nothing. The people who make Margin do not receive your meetings, notes, transcripts, audio, calendar, contacts, usage data or crash reports. There is no sign-in and no licence check that phones home.</p>
+      <p>Nothing. The people who make Milkrice do not receive your meetings, notes, transcripts, audio, calendar, contacts, usage data or crash reports. There is no sign-in and no licence check that phones home.</p>
       <p>This website sets no cookies and runs no analytics or third-party trackers. The fonts are loaded from Google Fonts, which receives your IP address and browser details when it serves them. Our web host may keep standard server logs, such as IP address and pages requested, for a short time to operate the site.</p>
 
-      <h2>What Margin stores on your Mac</h2>
-      <p>Everything lives in <span class="path">~/Library/<wbr>Application&nbsp;Support/<wbr>Margin</span>:</p>
+      <h2>What Milkrice stores on your Mac</h2>
+      <p>Everything lives in <span class="path">~/Library/<wbr>Application&nbsp;Support/<wbr>Milkrice</span>:</p>
       <ul>
-        <li><span class="path">margin.sqlite</span>: your notes, AI-written summaries, transcripts, speaker names, chat history about meetings, and your settings (including any calendar feed addresses you add).</li>
+        <li><span class="path">milkrice.sqlite</span>: your notes, AI-written summaries, transcripts, speaker names, chat history about meetings, and your settings (including any calendar feed addresses you add).</li>
         <li><span class="path">models/</span>: the speech and speaker models you downloaded.</li>
-        <li><span class="path">audio/</span>: recordings, only if you turn recordings on (they're off by default). Each is a compressed .m4a with your microphone on one channel and the call audio on the other, about 15 MB an hour. Margin deletes recordings older than your retention setting (30 days by default; 0 keeps them until you delete them), and deleting a meeting deletes its recordings.</li>
+        <li><span class="path">audio/</span>: recordings, only if you turn recordings on (they're off by default). Each is a compressed .m4a with your microphone on one channel and the call audio on the other, about 15 MB an hour. Milkrice deletes recordings older than your retention setting (30 days by default; 0 keeps them until you delete them), and deleting a meeting deletes its recordings.</li>
       </ul>
-      <p>When recordings are off, audio is processed in memory and discarded once it has been transcribed. While a recording is being made, uncompressed audio is written to the same folder and converted when the meeting ends. Requests to an AI provider run in a temporary folder (<span class="path">margin-llm</span> in the system temporary directory); the output file used for Codex is deleted after it's read.</p>
-      <p>To remove everything, quit Margin and delete the folder above.</p>
+      <p>When recordings are off, audio is processed in memory and discarded once it has been transcribed. While a recording is being made, uncompressed audio is written to the same folder and converted when the meeting ends. Requests to an AI provider run in a temporary folder (<span class="path">milkrice-llm</span> in the system temporary directory); the output file used for Codex is deleted after it's read.</p>
+      <p>To remove everything, quit Milkrice and delete the folder above.</p>
 
-      <h2>Permissions Margin asks for</h2>
+      <h2>Permissions Milkrice asks for</h2>
       <ul>
         <li><strong>Microphone</strong>, to hear you.</li>
-        <li><strong>Screen &amp; System Audio Recording</strong>, to hear the other people on a call. Margin only captures audio; it never captures your screen.</li>
+        <li><strong>Screen &amp; System Audio Recording</strong>, to hear the other people on a call. Milkrice only captures audio; it never captures your screen.</li>
         <li><strong>Calendars</strong>, read-only, to know when meetings start and end and who was invited.</li>
         <li><strong>Notifications</strong>, to tell you when a meeting is starting.</li>
       </ul>
 
       <h2>When information leaves your Mac</h2>
       <h3>The AI provider you choose</h3>
-      <p>Margin writes notes, titles meetings, matches speakers to names and answers questions using an AI provider you pick. Unless you turn it off, this happens automatically after each meeting. For each request Margin sends the meeting's title, date, invited names, your notes and the transcript text (shortened in the middle for very long meetings). It never sends audio.</p>
+      <p>Milkrice writes notes, titles meetings, matches speakers to names and answers questions using an AI provider you pick. Unless you turn it off, this happens automatically after each meeting. For each request Milkrice sends the meeting's title, date, invited names, your notes and the transcript text (shortened in the middle for very long meetings). It never sends audio.</p>
       <ul>
-        <li><strong>Claude Code</strong>: Margin runs the <code>claude</code> command you installed, using the Haiku model by default, with tools turned off and session saving disabled. The request goes to Anthropic under your Claude account.</li>
-        <li><strong>Codex</strong>: Margin runs the <code>codex</code> command you installed, in a read-only sandbox with an ephemeral session. The request goes to OpenAI under your ChatGPT or OpenAI account.</li>
-        <li><strong>Ollama</strong>: Margin talks to Ollama at <span class="path">127.0.0.1:11434</span> on your own Mac. Nothing leaves your computer.</li>
+        <li><strong>Claude Code</strong>: Milkrice runs the <code>claude</code> command you installed, using the Haiku model by default, with tools turned off and session saving disabled. The request goes to Anthropic under your Claude account.</li>
+        <li><strong>Codex</strong>: Milkrice runs the <code>codex</code> command you installed, in a read-only sandbox with an ephemeral session. The request goes to OpenAI under your ChatGPT or OpenAI account.</li>
+        <li><strong>Ollama</strong>: Milkrice talks to Ollama at <span class="path">127.0.0.1:11434</span> on your own Mac. Nothing leaves your computer.</li>
       </ul>
-      <p>Anthropic's and OpenAI's privacy policies and terms, and the data settings of your plan, apply to what you send them. Margin never sees or stores your sign-in details or API keys; it uses the tools you have already signed into.</p>
+      <p>Anthropic's and OpenAI's privacy policies and terms, and the data settings of your plan, apply to what you send them. Milkrice never sees or stores your sign-in details or API keys; it uses the tools you have already signed into.</p>
 
       <h3>Model downloads</h3>
-      <p>When you download a speech model, Margin fetches it from <span class="path">huggingface.co</span> (or <span class="path">download.moonshine.ai</span> for the Moonshine streaming model). Each file is checked against a pinned checksum before use. The speaker recognition model comes from the sherpa-onnx releases on GitHub. Like any download, those hosts see your IP address and which file you asked for. Margin sends nothing else.</p>
+      <p>When you download a speech model, Milkrice fetches it from <span class="path">huggingface.co</span> (or <span class="path">download.moonshine.ai</span> for the Moonshine streaming model). Each file is checked against a pinned checksum before use. The speaker recognition model comes from the sherpa-onnx releases on GitHub. Like any download, those hosts see your IP address and which file you asked for. Milkrice sends nothing else.</p>
 
       <h3>Update checks</h3>
-      <p>Shortly after launch, and when you choose "Check for updates" in the menu bar, Margin asks <span class="path">github.com</span> for the latest release information. GitHub sees your IP address and the request; Margin sends no identifiers. Updates are only installed if you agree, and are verified against a signature before they run.</p>
+      <p>Shortly after launch, and when you choose "Check for updates" in the menu bar, Milkrice asks <span class="path">github.com</span> for the latest release information. GitHub sees your IP address and the request; Milkrice sends no identifiers. Updates are only installed if you agree, and are verified against a signature before they run.</p>
 
       <h3>Calendar feeds you add</h3>
-      <p>Margin normally reads the calendars already synced to macOS. If you also paste an iCal address (for example Google Calendar's secret address), Margin fetches that address over HTTPS from time to time. The address is stored only in your local settings.</p>
+      <p>Milkrice normally reads the calendars already synced to macOS. If you also paste an iCal address (for example Google Calendar's secret address), Milkrice fetches that address over HTTPS from time to time. The address is stored only in your local settings.</p>
 
       <h3>Your agents</h3>
-      <p>If you connect Margin to Claude Code or Codex from Settings, those agents can read your meetings through the <code>margin</code> command or MCP server, on your Mac and read-only. Anything an agent reads becomes part of that agent's session, which is handled by its provider under your account.</p>
+      <p>If you connect Milkrice to Claude Code or Codex from Settings, those agents can read your meetings through the <code>milkrice</code> command or MCP server, on your Mac and read-only. Anything an agent reads becomes part of that agent's session, which is handled by its provider under your account.</p>
 
       <h2>Children</h2>
-      <p>Margin isn't directed at children and we don't knowingly collect anyone's information, children's included.</p>
+      <p>Milkrice isn't directed at children and we don't knowingly collect anyone's information, children's included.</p>
 
       <h2>Changes and contact</h2>
-      <p>If this policy changes, we'll update this page and the date above. Questions can go to the issue tracker at <a href="https://github.com/thekindofme/margin/issues">github.com/thekindofme/margin</a>.</p>
+      <p>If this policy changes, we'll update this page and the date above. Questions can go to the issue tracker at <a href="https://github.com/thekindofme/milkrice/issues">github.com/thekindofme/milkrice</a>.</p>
 
     </article>
   </main>
   <footer class="foot">
-    <a class="brand" href="./"><img src="assets/app-icon.webp" alt="" width="22" height="22" loading="lazy">Margin</a>
+    <a class="brand" href="./"><img src="assets/app-icon.webp" alt="" width="22" height="22" loading="lazy">Milkrice</a>
     <div class="foot-body">
       <p>This site has no cookies, analytics or trackers, so there's nothing to accept.</p>
       <p><a href="./">Back to the home page</a></p>

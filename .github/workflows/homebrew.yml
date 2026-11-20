@@ -34,9 +34,9 @@ jobs:
         id: dmg
         run: |
           version="${TAG#v}"
-          curl -fsSL -o margin.dmg "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/Margin_${version}_aarch64.dmg"
+          curl -fsSL -o milkrice.dmg "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/Milkrice_${version}_aarch64.dmg"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "sha=$(sha256sum margin.dmg | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "sha=$(sha256sum milkrice.dmg | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
         if: steps.gate.outputs.run == 'true'
@@ -49,11 +49,11 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         working-directory: tap
         run: |
-          sed -i -E 's/^(  version ")[^"]*(")/\1${{ steps.dmg.outputs.version }}\2/' Casks/margin.rb
-          sed -i -E 's/^(  sha256 ")[^"]*(")/\1${{ steps.dmg.outputs.sha }}\2/' Casks/margin.rb
+          sed -i -E 's/^(  version ")[^"]*(")/\1${{ steps.dmg.outputs.version }}\2/' Casks/milkrice.rb
+          sed -i -E 's/^(  sha256 ")[^"]*(")/\1${{ steps.dmg.outputs.sha }}\2/' Casks/milkrice.rb
           git diff --stat
           if git diff --quiet; then echo "Cask already up to date"; exit 0; fi
-          git config user.name "margin-release-bot"
-          git config user.email "margin-release-bot@users.noreply.github.com"
-          git commit -am "margin ${{ steps.dmg.outputs.version }}"
+          git config user.name "milkrice-release-bot"
+          git config user.email "milkrice-release-bot@users.noreply.github.com"
+          git commit -am "milkrice ${{ steps.dmg.outputs.version }}"
           git push

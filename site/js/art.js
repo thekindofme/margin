@@ -1,4 +1,4 @@
-/* Margin — hero piece: sound becomes ink.
+/* Milkrice — hero piece: sound becomes ink.
    A travelling sound wave (made of graphite particles) runs toward the ember margin rule.
    Each particle that crosses the rule flies to the nib and lays down a stroke of handwriting,
    so louder sound writes bigger, faster words. Pointer movement raises the voice, a click
@@ -551,7 +551,7 @@
   function stepFor(sec) { const n = Math.round(sec * 60); for (let i = 0; i < n; i++) step(1 / 60); render(); }
 
   // review hook for headless screenshots
-  window.__marginArt = {
+  window.__milkriceArt = {
     step: stepFor,
     clap: (x, y) => { clap(x, y); },
     pull: (x, y, sec) => { ptr.drag = true; ptr.x = x; ptr.y = y; stepFor(sec || 0.5); ptr.drag = false; },

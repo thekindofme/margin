@@ -1,4 +1,4 @@
-# Margin — brand notes
+# Milkrice — brand notes (the design motif is the old "margin rule"; the app was renamed from Margin)
 Local-first meeting notes. "Write in the margin, let the machine fill the page."
 - Palette: charcoal ink #151413, warm paper #F3EFE6, ember accent #E2603A, muted sage #8C9A86, graphite #3A3734
 - Feel: quiet, editorial, tactile paper + ink. Not Granola's green/cream. Calm, minimal, confident.

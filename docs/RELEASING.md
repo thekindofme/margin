@@ -1,9 +1,9 @@
-# Releasing Margin
+# Releasing Milkrice
 
-A pushed `v*` tag runs `.github/workflows/release.yml` on a macOS 14 (arm64) runner. It builds `margin-cli`, bundles the app, signs and notarizes it (when the Apple secrets exist), and creates a **draft** GitHub release containing:
+A pushed `v*` tag runs `.github/workflows/release.yml` on a macOS 14 (arm64) runner. It builds `milkrice-cli`, bundles the app, signs and notarizes it (when the Apple secrets exist), and creates a **draft** GitHub release containing:
 
-- `Margin_<version>_aarch64.dmg`
-- `Margin.app.tar.gz` and `Margin.app.tar.gz.sig` (the updater bundle and its signature)
+- `Milkrice_<version>_aarch64.dmg`
+- `Milkrice.app.tar.gz` and `Milkrice.app.tar.gz.sig` (the updater bundle and its signature)
 - `latest.json` (what the in-app updater reads)
 - `SHA256SUMS.txt`
 
@@ -24,7 +24,7 @@ Without the Apple secrets the build still works but is unsigned, and the release
    The workflow fails early if the tag doesn't match `tauri.conf.json`'s version.
 5. When the workflow finishes, open the draft release on GitHub. Check the assets are all there, and (on a clean Mac) that the DMG opens without a Gatekeeper warning.
 6. Click **Publish release**. The Homebrew workflow runs and pushes the new version and checksum to the tap. Check its run in the Actions tab; re-run it by hand with the `tag` input if needed.
-7. Smoke test: `brew update && brew install --cask thekindofme/tap/margin`, and from an older build, tray menu > "Check for updates…".
+7. Smoke test: `brew update && brew install --cask thekindofme/tap/milkrice`, and from an older build, tray menu > "Check for updates…".
 
 Note: the updater reads `releases/latest/download/latest.json`, which only exists once the release is published (not draft, not prerelease).
 
@@ -90,4 +90,4 @@ Artifacts land in `target/release/bundle/`.
 
 ## Homebrew cask
 
-The cask lives in `thekindofme/homebrew-tap` (`Casks/margin.rb`). Create that repository on GitHub and push it once before the first release; after that the workflow keeps `version` and `sha256` current. The initial checksum in the file is a placeholder.
+The cask lives in `thekindofme/homebrew-tap` (`Casks/milkrice.rb`). Create that repository on GitHub and push it once before the first release; after that the workflow keeps `version` and `sha256` current. The initial checksum in the file is a placeholder.

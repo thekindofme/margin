@@ -1,10 +1,10 @@
 # Third-party notices
 
-Margin is MIT licensed (see `LICENSE`). It builds on the open models and libraries below. The website's [acknowledgements page](https://margin.yasithfernando.com/acknowledgements.html) is the user-facing version of this list.
+Milkrice is MIT licensed (see `LICENSE`). It builds on the open models and libraries below. The website's [acknowledgements page](https://milkrice.yasithfernando.com/acknowledgements.html) is the user-facing version of this list.
 
 ## Speech and speaker models
 
-Models are not bundled with Margin. Users download them on demand from their upstream sources and they stay under their authors' licenses.
+Models are not bundled with Milkrice. Users download them on demand from their upstream sources and they stay under their authors' licenses.
 
 | Model | From | License | Notes |
 |---|---|---|---|

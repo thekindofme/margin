@@ -76,7 +76,7 @@ jobs:
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
-          kc="$RUNNER_TEMP/margin-build.keychain-db"
+          kc="$RUNNER_TEMP/milkrice-build.keychain-db"
           kcpw=$(uuidgen)
           echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
           security create-keychain -p "$kcpw" "$kc"
@@ -109,9 +109,9 @@ jobs:
           {
             echo 'body<<EOF'
             if [ "${{ steps.detect.outputs.sign }}" = "true" ] && [ "${{ steps.detect.outputs.notarize }}" = "true" ]; then
-              echo "Margin ${GITHUB_REF_NAME#v}. Signed and notarized. Apple Silicon, macOS 14.2 or later."
+              echo "Milkrice ${GITHUB_REF_NAME#v}. Signed and notarized. Apple Silicon, macOS 14.2 or later."
             elif [ "${{ steps.detect.outputs.sign }}" = "true" ]; then
-              echo "Margin ${GITHUB_REF_NAME#v}. Signed but NOT notarized. Apple Silicon, macOS 14.2 or later."
+              echo "Milkrice ${GITHUB_REF_NAME#v}. Signed but NOT notarized. Apple Silicon, macOS 14.2 or later."
             else
               echo "Unsigned test build. macOS will refuse to open it without right-click > Open; do not distribute."
             fi
@@ -124,7 +124,7 @@ jobs:
         if: steps.detect.outputs.updater != 'true'
         run: echo '{"bundle":{"createUpdaterArtifacts":false}}' > "$RUNNER_TEMP/no-updater.json"
 
-      # Tauri's beforeBuildCommand builds margin-cli in release first; the bundle embeds it.
+      # Tauri's beforeBuildCommand builds milkrice-cli in release first; the bundle embeds it.
       - name: Build and draft release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -134,7 +134,7 @@ jobs:
         with:
           tauriScript: cargo tauri
           tagName: ${{ github.ref_name }}
-          releaseName: Margin ${{ github.ref_name }}
+          releaseName: Milkrice ${{ github.ref_name }}
           releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: true
           prerelease: false
@@ -155,5 +155,5 @@ jobs:
       - name: Clean up keychain
         if: always() && steps.detect.outputs.sign == 'true'
         run: |
-          security delete-keychain "$RUNNER_TEMP/margin-build.keychain-db" || true
+          security delete-keychain "$RUNNER_TEMP/milkrice-build.keychain-db" || true
           rm -f "$RUNNER_TEMP/AuthKey.p8"
