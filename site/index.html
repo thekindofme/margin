@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..600,100;1,9..144,300..600,100&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/site.css?v=8">
+<link rel="stylesheet" href="css/site.css?v=13">
 <link rel="preload" as="image" href="assets/plate.webp" type="image/webp">
 <script>(function(d){if(!matchMedia('(prefers-reduced-motion: reduce)').matches)d.className='live '+(window.CSS&&CSS.supports('animation-timeline: view()')&&!/[?&]nosda/.test(location.search)?'sda':'no-sda')})(document.documentElement)</script>
 </head>
@@ -30,6 +30,7 @@
     <a href="#privacy">Privacy</a>
     <a href="#ai">Your AI</a>
     <a href="#agents">Agents</a>
+    <a href="#compare">Compare</a>
     <a href="#faq">FAQ</a>
     <a href="https://github.com/thekindofme/milkrice">GitHub</a>
   </nav>
@@ -277,7 +278,36 @@ Your own thoughts go here. They stay put.</pre>
     </div>
   </section>
 
-  <section class="sec tint" id="faq" aria-labelledby="h-faq">
+  <section class="sec tint" id="compare" aria-labelledby="h-compare">
+    <div class="wrap">
+      <div class="sec-h rv">
+        <p class="eyebrow">Why Milkrice</p>
+        <h2 id="h-compare">Why this, when there's Granola?</h2>
+        <p>Granola and its cloud cousins are polished and quick to set up. Milkrice makes a different trade: your audio never leaves your Mac, there's no account or subscription, and your notes are written by the AI you already pay for.</p>
+      </div>
+      <div class="cmp-wrap rv">
+        <table class="cmp">
+          <thead><tr><th scope="col"><span class="sr">Feature</span></th><th scope="col" class="me">Milkrice</th><th scope="col">Granola</th><th scope="col">Otter, Fireflies</th><th scope="col">Other open-source notetakers</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Where audio is transcribed</th><td class="me y">On your Mac</td><td class="n">Cloud</td><td class="n">Cloud</td><td class="y">On your computer</td></tr>
+            <tr><th scope="row">Joins the call as a bot</th><td class="me y">Never</td><td class="y">No</td><td class="n">By default</td><td class="y">No</td></tr>
+            <tr><th scope="row">Account or subscription</th><td class="me y">Neither</td><td class="n">Account; paid plans from $14/mo</td><td class="n">Account; paid plans</td><td class="p">Usually none; some have paid tiers</td></tr>
+            <tr><th scope="row">Who writes the notes</th><td class="me y">Your own Claude Code or Codex, or Ollama offline</td><td class="n">Their AI, in their cloud</td><td class="n">Their AI, in their cloud</td><td class="p">Varies: a local model, or an API key</td></tr>
+            <tr><th scope="row">Your agents can read your meetings</th><td class="me y">Free local CLI + MCP</td><td class="p">Hosted MCP; transcripts on paid plans</td><td class="p">Hosted MCP</td><td class="p">Varies; some behind a paid tier</td></tr>
+            <tr><th scope="row">Open source</th><td class="me y">MIT</td><td class="n">No</td><td class="n">No</td><td class="y">Mostly MIT</td></tr>
+            <tr><th scope="row">Windows, phone</th><td class="me n">Mac only (Apple Silicon)</td><td class="y">Windows, iPhone</td><td class="y">Everywhere</td><td class="p">Some run on Windows and Linux</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="cmp-legend rv"><span>Checked 20 November 2026.</span><a href="compare.html">Full comparison with Meetily, Minutes, Yogurt, Fathom and more</a></p>
+      <div class="picks rv">
+        <div class="card local"><p class="k">Choose Milkrice if</p><ul><li>you're on an Apple Silicon Mac</li><li>you want audio to stay on your machine</li><li>you'd rather use the AI subscription you already have than add another</li><li>you want your agents to read your meetings, for free</li></ul></div>
+        <div class="card"><p class="k">Choose something else if</p><ul><li>you need Windows, Linux or a phone app</li><li>you want team sharing or CRM sync</li><li>you want zero setup: Milkrice needs a few permissions and a model download</li></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="faq" aria-labelledby="h-faq">
     <div class="wrap">
       <div class="sec-h rv">
         <p class="eyebrow">Questions</p>
@@ -304,7 +334,7 @@ Your own thoughts go here. They stay put.</pre>
     </div>
   </section>
 
-  <section class="sec end" aria-labelledby="h-end">
+  <section class="sec tint end" aria-labelledby="h-end">
     <div class="wrap">
       <div class="mark rv" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
       <h2 id="h-end" class="rv">Bring it to your next meeting.</h2>
@@ -327,6 +357,7 @@ Your own thoughts go here. They stay put.</pre>
         <a href="license.html">License</a>
         <a href="acknowledgements.html">Acknowledgements</a>
         <a href="consent.html">Recording consent</a>
+        <a href="compare.html">Compare</a>
         <a href="https://github.com/thekindofme/milkrice">GitHub</a>
       </nav>
       <p>This site has no cookies, analytics or trackers, so there's nothing to accept.</p>
