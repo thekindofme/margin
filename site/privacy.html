@@ -76,7 +76,10 @@
       <p>Anthropic's and OpenAI's privacy policies and terms, and the data settings of your plan, apply to what you send them. Margin never sees or stores your sign-in details or API keys; it uses the tools you have already signed into.</p>
 
       <h3>Model downloads</h3>
-      <p>When you download a speech model, Margin fetches it from <span class="path">blob.handy.computer</span>, a mirror run by the open-source Handy project. The speaker recognition model comes from the sherpa-onnx releases on GitHub. Like any download, those hosts see your IP address and which file you asked for. Margin sends nothing else.</p>
+      <p>When you download a speech model, Margin fetches it from <span class="path">huggingface.co</span> (or <span class="path">download.moonshine.ai</span> for the Moonshine streaming model). Each file is checked against a pinned checksum before use. The speaker recognition model comes from the sherpa-onnx releases on GitHub. Like any download, those hosts see your IP address and which file you asked for. Margin sends nothing else.</p>
+
+      <h3>Update checks</h3>
+      <p>Shortly after launch, and when you choose "Check for updates" in the menu bar, Margin asks <span class="path">github.com</span> for the latest release information. GitHub sees your IP address and the request; Margin sends no identifiers. Updates are only installed if you agree, and are verified against a signature before they run.</p>
 
       <h3>Calendar feeds you add</h3>
       <p>Margin normally reads the calendars already synced to macOS. If you also paste an iCal address (for example Google Calendar's secret address), Margin fetches that address over HTTPS from time to time. The address is stored only in your local settings.</p>

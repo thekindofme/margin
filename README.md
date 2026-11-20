@@ -31,6 +31,22 @@ To connect, use **Settings → Agents**. It installs the `margin` command, then 
 | `margin search TEXT [--in notes\|ai\|transcript]` | Hits say where they matched |
 | `margin mcp` | MCP server on stdio: `list_meetings`, `get_meeting`, `get_transcript`, `search` |
 
+## Install
+
+Apple Silicon Macs, macOS 14.2 or later.
+
+**Homebrew**
+
+```bash
+brew install --cask thekindofme/tap/margin
+```
+
+**Direct download.** Get the DMG from the [latest release](https://github.com/thekindofme/margin/releases/latest), open it and drag Margin to Applications. Checksums are in `SHA256SUMS.txt` on the release page.
+
+**Build from source.** See [Build and run](#build-and-run) and [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Margin checks GitHub for new releases shortly after launch (and from "Check for updates…" in the menu bar) and asks before installing one.
+
 ## Layout
 
 ```
@@ -113,6 +129,7 @@ Injects a calendar meeting. The real scheduler auto-starts recording, auto-stops
 - **What goes over the network:**
   - Model downloads.
   - Your calendar feed, if you add a secret iCal address.
+  - A check for new Margin releases on GitHub (the app asks before installing anything).
   - When notes are written, the transcript text and your notes go to the AI you chose (Claude Code or Codex, using your own subscription). Choose Ollama to keep even that on-device.
 - **Obsidian:** export writes plain Markdown files into the folder you pick.
 
