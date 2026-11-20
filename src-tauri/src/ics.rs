@@ -2,7 +2,7 @@
 //! Feeds are fetched every 10 minutes into memory; the secret URL is never logged.
 use crate::state::AppState;
 use chrono::{DateTime, Utc};
-use margin_core::CalEvent;
+use milkrice_core::CalEvent;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -41,7 +41,7 @@ fn text_for(feed: &Feed, force: bool) -> Result<String, String> {
             }
         }
     }
-    let text = margin_core::ics::fetch(&feed.url).map_err(|e| e.to_string());
+    let text = milkrice_core::ics::fetch(&feed.url).map_err(|e| e.to_string());
     if let Err(e) = &text {
         log::warn!("calendar feed '{}' ({}): {e}", feed.name, host(&feed.url));
     }
@@ -54,7 +54,7 @@ pub fn events_between(app: &AppHandle, from: DateTime<Utc>, to: DateTime<Utc>) -
     let mut out = Vec::new();
     for f in &feeds {
         if let Ok(t) = text_for(f, false) {
-            out.extend(margin_core::ics::parse(&t, &f.name, f.owner_email.as_deref(), from, to));
+            out.extend(milkrice_core::ics::parse(&t, &f.name, f.owner_email.as_deref(), from, to));
         }
     }
     out
@@ -64,7 +64,7 @@ pub fn events_between(app: &AppHandle, from: DateTime<Utc>, to: DateTime<Utc>) -
 pub fn test_feed(feed: &Feed) -> anyhow::Result<usize> {
     let text = text_for(feed, true).map_err(anyhow::Error::msg)?;
     let now = Utc::now();
-    Ok(margin_core::ics::parse(&text, &feed.name, feed.owner_email.as_deref(), now, now + chrono::Duration::days(30)).len())
+    Ok(milkrice_core::ics::parse(&text, &feed.name, feed.owner_email.as_deref(), now, now + chrono::Duration::days(30)).len())
 }
 
 pub fn forget(id: &str) {

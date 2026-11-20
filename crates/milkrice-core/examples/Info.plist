@@ -3,12 +3,12 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>computer.margin.dev</string>
+	<string>computer.milkrice.dev</string>
 	<key>CFBundleName</key>
-	<string>margin-dev</string>
+	<string>milkrice-dev</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Margin reads your calendar locally to match meetings to notes.</string>
+	<string>Milkrice reads your calendar locally to match meetings to notes.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>Margin reads your calendar locally to match meetings to notes.</string>
+	<string>Milkrice reads your calendar locally to match meetings to notes.</string>
 </dict>
 </plist>

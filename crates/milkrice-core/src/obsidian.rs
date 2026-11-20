@@ -1,6 +1,6 @@
 //! Export meetings into an Obsidian vault (or any folder) as plain Markdown + YAML front matter.
 //!
-//! One file per meeting. Margin only rewrites the block between its markers, so anything the
+//! One file per meeting. Milkrice only rewrites the block between its markers, so anything the
 //! user adds above or below in Obsidian survives every re-export.
 use crate::llm::speaker_name;
 use crate::store::Meeting;
@@ -10,8 +10,12 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
-pub const START: &str = "<!-- margin:start — Margin updates this block; write your own notes outside it -->";
-pub const END: &str = "<!-- margin:end -->";
+pub const START: &str = "<!-- milkrice:start — Milkrice updates this block; write your own notes outside it -->";
+pub const END: &str = "<!-- milkrice:end -->";
+// Markers written by notes exported before the rename from Margin; still recognised so
+// existing notes are updated in place instead of getting a second block.
+const LEGACY_START: &str = "<!-- margin:start — Margin updates this block; write your own notes outside it -->";
+const LEGACY_END: &str = "<!-- margin:end -->";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -88,7 +92,7 @@ fn link(name: &str, on: bool) -> String {
     if on { format!("[[{}]]", sanitize(name)) } else { name.to_string() }
 }
 
-/// The Margin-owned block (front matter is handled separately).
+/// The Milkrice-owned block (front matter is handled separately).
 pub fn render_block(m: &Meeting, segs: &[Segment], opts: &ExportOptions) -> String {
     let mut o = String::new();
     let local = m.created_at.with_timezone(&chrono::Local);
@@ -146,7 +150,7 @@ pub fn render_front_matter(m: &Meeting, opts: &ExportOptions) -> String {
     if !people.is_empty() {
         let _ = writeln!(f, "attendees: [{}]", people.join(", "));
     }
-    let _ = writeln!(f, "tags: [meeting, margin]");
+    let _ = writeln!(f, "tags: [meeting, milkrice]");
     if !m.enhanced_by.is_empty() {
         let _ = writeln!(f, "summary_by: {}", yaml_str(&m.enhanced_by));
     }
@@ -156,25 +160,31 @@ pub fn render_front_matter(m: &Meeting, opts: &ExportOptions) -> String {
     if let Some(u) = &m.meeting_url {
         let _ = writeln!(f, "call_link: {}", yaml_str(u));
     }
-    let _ = writeln!(f, "margin_id: {}", m.id);
+    let _ = writeln!(f, "milkrice_id: {}", m.id);
     f.push_str("---\n");
     f
 }
 
-/// Replace Margin's block (and front matter) in an existing note, keeping the user's additions.
+/// Replace Milkrice's block (and front matter) in an existing note, keeping the user's additions.
 pub fn merge(existing: &str, front: &str, block: &str) -> String {
-    // Keep any user front-matter keys we don't manage? Simpler and predictable: Margin owns the
+    // Keep any user front-matter keys we don't manage? Simpler and predictable: Milkrice owns the
     // front matter; the user's notes live outside the block.
     let body = existing
         .strip_prefix("---\n")
         .and_then(|rest| rest.find("\n---\n").map(|i| &rest[i + 5..]))
         .unwrap_or(existing);
-    match (body.find(START), body.find(END)) {
-        (Some(a), Some(b)) if b > a => {
-            let after = &body[b + END.len()..];
+    let found = [(START, END), (LEGACY_START, LEGACY_END)]
+        .into_iter()
+        .find_map(|(s, e)| match (body.find(s), body.find(e)) {
+            (Some(a), Some(b)) if b > a => Some((a, b + e.len())),
+            _ => None,
+        });
+    match found {
+        Some((a, end)) => {
+            let after = &body[end..];
             format!("{front}{}{}{}", &body[..a], block.trim_end(), after)
         }
-        _ => {
+        None => {
             let extra = body.trim();
             if extra.is_empty() { format!("{front}{block}") } else { format!("{front}{block}\n{extra}\n") }
         }
@@ -199,7 +209,7 @@ pub fn export(m: &Meeting, segs: &[Segment], opts: &ExportOptions, previous: Opt
     }
     let content = merge(existing.as_deref().unwrap_or(""), &render_front_matter(m, opts), &render_block(m, segs, opts));
     // Atomic replace so Obsidian never sees a half-written file.
-    let tmp = path.with_extension("md.margin-tmp");
+    let tmp = path.with_extension("md.milkrice-tmp");
     std::fs::write(&tmp, &content)?;
     std::fs::rename(&tmp, &path)?;
     Ok(path)
@@ -226,8 +236,16 @@ mod tests {
     }
 
     #[test]
+    fn legacy_margin_block_is_replaced_in_place() {
+        let old = format!("---\nmargin_id: abc\n---\nmine above\n{LEGACY_START}\nold stuff\n{LEGACY_END}\nmine below\n");
+        let out = merge(&old, "---\nmilkrice_id: abc\n---\n", &format!("{START}\nnew\n{END}\n"));
+        assert!(out.contains("mine above") && out.contains("mine below") && out.contains("new"));
+        assert!(!out.contains("old stuff") && !out.contains("margin:"));
+    }
+
+    #[test]
     fn writes_and_preserves_user_text() {
-        let dir = std::env::temp_dir().join(format!("margin-obs-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("milkrice-obs-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let opts = ExportOptions { root: dir.to_string_lossy().into(), ..Default::default() };
         let mut m = meeting();

@@ -1,19 +1,19 @@
 [package]
-name = "margin"
+name = "milkrice"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "Local-first AI meeting notes"
 
 [lib]
-name = "margin_app"
+name = "milkrice_app"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2.7", features = [] }
 
 [dependencies]
-margin-core = { path = "../crates/margin-core" }
+milkrice-core = { path = "../crates/milkrice-core" }
 tauri = { version = "2.12", features = ["tray-icon", "image-png", "macos-private-api", "protocol-asset"] }
 tauri-plugin-notification = "2.8"
 tauri-plugin-opener = "2.7"

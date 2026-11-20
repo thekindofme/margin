@@ -27,7 +27,7 @@ pub fn meeting_app_using_mic() -> Option<String> {
 }
 
 /// The known meeting app that is itself capturing audio input right now, using CoreAudio's
-/// per-process attribution (macOS 14.2+). Unlike `meeting_app_using_mic`, Margin's own
+/// per-process attribution (macOS 14.2+). Unlike `meeting_app_using_mic`, Milkrice's own
 /// recording doesn't count. `None` when per-process attribution isn't available.
 pub fn meeting_app_capturing_input() -> Option<Option<String>> {
     imp::meeting_app_capturing_input()
@@ -232,6 +232,6 @@ mod tests {
         assert_eq!(super::meeting_app_for_process("us.zoom.xos"), Some("Zoom"));
         assert_eq!(super::meeting_app_for_process("com.microsoft.teams2.helper"), Some("Microsoft Teams"));
         assert_eq!(super::meeting_app_for_process("com.apple.Safari"), None);
-        assert_eq!(super::meeting_app_for_process("app.margin"), None);
+        assert_eq!(super::meeting_app_for_process("app.milkrice"), None);
     }
 }

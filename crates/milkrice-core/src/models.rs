@@ -56,7 +56,7 @@ pub fn download_file(
     let client = reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(20))
         .timeout(None)
-        .user_agent("Margin/0.1 (local meeting notes)")
+        .user_agent("Milkrice/0.1 (local meeting notes)")
         .build()?;
     let mut resp = client.get(url).send().context("connecting")?;
     if !resp.status().is_success() {
@@ -107,7 +107,7 @@ fn download_verified(f: &crate::catalog::ModelFile, dest: &Path, cancel: &Atomic
     let client = reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(20))
         .timeout(None)
-        .user_agent("Margin/0.1 (local meeting notes)")
+        .user_agent("Milkrice/0.1 (local meeting notes)")
         .build()?;
     let mut resp = client.get(f.url).send().with_context(|| format!("connecting for {}", f.name))?;
     if !resp.status().is_success() {

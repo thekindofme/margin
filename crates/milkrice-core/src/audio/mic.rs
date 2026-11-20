@@ -19,7 +19,7 @@ pub fn list_input_devices() -> Vec<String> {
     // Enumeration probes each device through CoreAudio, which can block; run it on a
     // helper thread and return whatever was found when the timeout expires.
     let (name_tx, name_rx) = unbounded::<String>();
-    let spawned = std::thread::Builder::new().name("margin-mic-enum".into()).spawn(move || {
+    let spawned = std::thread::Builder::new().name("milkrice-mic-enum".into()).spawn(move || {
         let host = cpal::default_host();
         if let Some(n) = host.default_input_device().and_then(|d| d.name().ok()) {
             let _ = name_tx.send(n);
@@ -157,7 +157,7 @@ pub fn start_mic(
 
     // Stream thread: owns the !Send cpal stream until told to stop.
     let stream_thread: JoinHandle<()> = std::thread::Builder::new()
-        .name("margin-mic-stream".into())
+        .name("milkrice-mic-stream".into())
         .spawn(move || match open(device.as_deref(), raw_tx, errors) {
             Ok((stream, rate)) => {
                 let _ = ready_tx.send(Ok(rate));
@@ -200,7 +200,7 @@ pub fn start_mic(
     };
 
     let worker = std::thread::Builder::new()
-        .name("margin-mic-resample".into())
+        .name("milkrice-mic-resample".into())
         .spawn(move || {
             'outer: for chunk in raw_rx.iter() {
                 let mut alive = true;

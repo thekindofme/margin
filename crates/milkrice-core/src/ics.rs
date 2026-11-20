@@ -16,7 +16,7 @@ pub fn fetch(url: &str) -> Result<String> {
     }
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent("Margin/0.1 (local meeting notes)")
+        .user_agent("Milkrice/0.1 (local meeting notes)")
         .build()?;
     let resp = client.get(&url).send().context("fetching calendar")?;
     if !resp.status().is_success() {

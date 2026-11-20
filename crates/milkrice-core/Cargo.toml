@@ -1,5 +1,5 @@
 [package]
-name = "margin-core"
+name = "milkrice-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -40,5 +40,5 @@ objc2-core-audio = "0.3"
 block2 = "0.6"
 
 [[bin]]
-name = "margin-cli"
-path = "src/bin/margin-cli.rs"
+name = "milkrice-cli"
+path = "src/bin/milkrice-cli.rs"

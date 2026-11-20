@@ -1,4 +1,4 @@
-//! The open-weights speech-to-text models Margin can download and run locally.
+//! The open-weights speech-to-text models Milkrice can download and run locally.
 use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

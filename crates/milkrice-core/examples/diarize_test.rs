@@ -1,4 +1,4 @@
-use margin_core::diarize::{cosine, SpeakerClusterer, SpeakerEmbedder, DEFAULT_THRESHOLD};
+use milkrice_core::diarize::{cosine, SpeakerClusterer, SpeakerEmbedder, DEFAULT_THRESHOLD};
 use std::time::Instant;
 
 fn main() -> anyhow::Result<()> {

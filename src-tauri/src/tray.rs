@@ -5,10 +5,10 @@ use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{TrayIcon, TrayIconBuilder};
 use chrono::Utc;
-use margin_core::CalEvent;
+use milkrice_core::CalEvent;
 use tauri::{AppHandle, Emitter, Manager};
 
-const TRAY_ID: &str = "margin-tray";
+const TRAY_ID: &str = "milkrice-tray";
 const ICON: &[u8] = include_bytes!("../icons/tray.png");
 const ICON_REC: &[u8] = include_bytes!("../icons/tray-rec.png");
 
@@ -81,9 +81,9 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         menu.append(&MenuItem::with_id(app, "autorec_off", "Auto-record: on — Turn off", true, None::<&str>)?)?;
     }
     menu.append(&PredefinedMenuItem::separator(app)?)?;
-    menu.append(&MenuItem::with_id(app, "open", "Open Margin", true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(app, "open", "Open Milkrice", true, None::<&str>)?)?;
     menu.append(&MenuItem::with_id(app, "update", "Check for updates…", true, None::<&str>)?)?;
-    menu.append(&MenuItem::with_id(app, "quit", "Quit Margin", true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(app, "quit", "Quit Milkrice", true, None::<&str>)?)?;
     Ok(menu)
 }
 
@@ -111,7 +111,7 @@ fn start_clock(app: &AppHandle) {
             if title != last {
                 if let Some(tray) = app.tray_by_id(TRAY_ID) {
                     let _ = tray.set_title(if title.is_empty() { None } else { Some(title.as_str()) });
-                    let _ = tray.set_tooltip(Some(if title.is_empty() { "Margin".to_string() } else { format!("Margin is recording · {title}") }));
+                    let _ = tray.set_tooltip(Some(if title.is_empty() { "Milkrice".to_string() } else { format!("Milkrice is recording · {title}") }));
                 }
                 last = title;
             }
@@ -124,7 +124,7 @@ pub fn init(app: &AppHandle) -> tauri::Result<TrayIcon> {
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(Image::from_bytes(ICON)?)
         .icon_as_template(true)
-        .tooltip("Margin")
+        .tooltip("Milkrice")
         .menu(&build_menu(app)?)
         .show_menu_on_left_click(true)
         .on_menu_event(|app, ev| {
@@ -143,7 +143,7 @@ pub fn init(app: &AppHandle) -> tauri::Result<TrayIcon> {
                     if let Err(e) = turn_off_auto_record(&app) {
                         recorder::notify(&app, "Couldn't turn off auto-record", &e.to_string());
                     } else {
-                        recorder::notify(&app, "Auto-record is off", "Margin will notify you when meetings start instead.");
+                        recorder::notify(&app, "Auto-record is off", "Milkrice will notify you when meetings start instead.");
                     }
                 }
                 id if id.starts_with("next:") => {

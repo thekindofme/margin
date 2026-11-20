@@ -1,4 +1,4 @@
-//! Minimal MCP server (JSON-RPC 2.0 over stdio) exposing Margin's meetings to agents.
+//! Minimal MCP server (JSON-RPC 2.0 over stdio) exposing Milkrice's meetings to agents.
 //! Read-only. Tools return the same compact, provenance-labelled text as the CLI.
 use crate::agent::{self, Scope};
 use crate::store::Store;
@@ -111,7 +111,7 @@ fn handle(store: &Store, req: &Value) -> Option<Value> {
         "initialize" => json!({
             "protocolVersion": req["params"]["protocolVersion"].as_str().unwrap_or(PROTOCOL),
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "margin", "version": env!("CARGO_PKG_VERSION")},
+            "serverInfo": {"name": "milkrice", "version": env!("CARGO_PKG_VERSION")},
             "instructions": agent::OVERVIEW,
         }),
         "ping" => json!({}),

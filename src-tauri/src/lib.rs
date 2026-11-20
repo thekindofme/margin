@@ -13,10 +13,15 @@ use tauri::{Manager, RunEvent, WindowEvent};
 
 pub fn run() {
     init_logging();
+    match milkrice_core::paths::migration_outcome() {
+        milkrice_core::paths::Migration::Migrated => log::info!("migrated data folder from Margin to Milkrice"),
+        milkrice_core::paths::Migration::Failed(e) => log::error!("could not migrate the old Margin data folder (left untouched): {e}"),
+        milkrice_core::paths::Migration::NotNeeded => {}
+    }
     // Use CoreML/Metal acceleration where the engine supports it.
     transcribe_rs_accel();
 
-    let store = Arc::new(margin_core::store::Store::open_default().expect("open database"));
+    let store = Arc::new(milkrice_core::store::Store::open_default().expect("open database"));
     // Notes opened from an upcoming event but never used don't pile up in the list.
     match store.purge_empty_drafts(None) {
         Ok(n) if n > 0 => eprintln!("removed {n} empty draft notes"),
@@ -33,17 +38,18 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             tray::init(&handle)?;
-            if let Ok(dir) = std::env::var("MARGIN_SELFTEST") {
+            migrate_login_item(&handle);
+            if let Ok(dir) = std::env::var("MILKRICE_SELFTEST") {
                 recorder::selftest(handle.clone(), dir.into());
                 return Ok(());
             }
-            if let Some(secs) = std::env::var("MARGIN_TEST_EVENT").ok().and_then(|v| v.parse().ok()) {
+            if let Some(secs) = std::env::var("MILKRICE_TEST_EVENT").ok().and_then(|v| v.parse().ok()) {
                 recorder::calendar_selftest(handle.clone(), secs);
             }
             // Opt-in recordings: enforce the retention window.
             let days = handle.state::<AppState>().settings().audio_retention_days;
             std::thread::spawn(move || {
-                let n = margin_core::audio_rec::enforce_retention(days);
+                let n = milkrice_core::audio_rec::enforce_retention(days);
                 if n > 0 {
                     log::info!("deleted {n} recordings older than {days} days");
                 }
@@ -130,9 +136,9 @@ pub fn run() {
             commands::agent_connect,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building Margin")
+        .expect("error while building Milkrice")
         .run(|app, event| match event {
-            // Closing the window keeps Margin in the menu bar so it can catch meetings.
+            // Closing the window keeps Milkrice in the menu bar so it can catch meetings.
             RunEvent::WindowEvent { label, event: WindowEvent::CloseRequested { api, .. }, .. } if label == "main" => {
                 api.prevent_close();
                 if let Some(w) = app.get_webview_window("main") {
@@ -151,13 +157,35 @@ pub fn run() {
 fn transcribe_rs_accel() {
     // Plain CPU int8 is the fast path on Apple Silicon; ONNX engines don't benefit from CoreML
     // (and some, like Canary, fail on it). Whisper still uses Metal via whisper.cpp.
-    margin_core::transcribe_rs::set_ort_accelerator(margin_core::transcribe_rs::OrtAccelerator::CpuOnly);
+    milkrice_core::transcribe_rs::set_ort_accelerator(milkrice_core::transcribe_rs::OrtAccelerator::CpuOnly);
 }
 
-/// Log to ~/Library/Application Support/Margin/margin.log (rotated at 5 MB) and stderr.
+/// Before the rename, "Open at login" wrote ~/Library/LaunchAgents/Margin.plist pointing at
+/// Margin.app. If that is present, drop it and register the Milkrice login item instead.
+fn migrate_login_item(app: &tauri::AppHandle) {
+    use tauri_plugin_autostart::ManagerExt;
+    let Some(dir) = dirs::home_dir().map(|h| h.join("Library/LaunchAgents")) else { return };
+    let old = dir.join("Margin.plist");
+    let Ok(text) = std::fs::read_to_string(&old) else { return };
+    if !text.contains("Margin.app") {
+        return; // not ours; leave it alone
+    }
+    match std::fs::remove_file(&old) {
+        Ok(()) => {
+            if let Err(e) = app.autolaunch().enable() {
+                log::warn!("could not enable Milkrice login item after migration: {e}");
+            } else {
+                log::info!("migrated login item from Margin to Milkrice");
+            }
+        }
+        Err(e) => log::warn!("could not remove old Margin login item: {e}"),
+    }
+}
+
+/// Log to ~/Library/Application Support/Milkrice/milkrice.log (rotated at 5 MB) and stderr.
 fn init_logging() {
     use std::io::Write;
-    let path = margin_core::paths::data_dir().join("margin.log");
+    let path = milkrice_core::paths::data_dir().join("milkrice.log");
     if std::fs::metadata(&path).map(|m| m.len() > 5 << 20).unwrap_or(false) {
         let _ = std::fs::rename(&path, path.with_extension("log.1"));
     }

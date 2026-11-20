@@ -149,7 +149,7 @@ impl Restarter {
         // Tearing down a dead stream can block inside CoreAudio / ScreenCaptureKit: keep it
         // off the audio path.
         if let Some(old) = old {
-            let _ = std::thread::Builder::new().name("margin-capture-stop".into()).spawn(move || old.stop());
+            let _ = std::thread::Builder::new().name("milkrice-capture-stop".into()).spawn(move || old.stop());
         }
         Ok(())
     }
@@ -290,7 +290,7 @@ impl Session {
                 None
             }
         });
-        let segmenter = std::thread::Builder::new().name("margin-vad".into()).spawn(move || {
+        let segmenter = std::thread::Builder::new().name("milkrice-vad".into()).spawn(move || {
             let mut restarter = restarter;
             let mut watch: [SourceWatch; 2] = Default::default();
             let mut last_watch = Instant::now();
@@ -415,7 +415,7 @@ impl Session {
         let worker_sink = sink;
         let speaker_base = cfg.speaker_base;
         let worker = std::thread::Builder::new()
-            .name("margin-stt".into())
+            .name("milkrice-stt".into())
             .spawn(move || worker_loop(utt_rx, engine, embedder, clusterer, speaker_base, sys_progress, worker_sink))?;
 
         Ok(Self {

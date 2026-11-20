@@ -1,4 +1,4 @@
-//! Agent-facing views of Margin's data, shared by the `margin` CLI and the MCP server.
+//! Agent-facing views of Milkrice's data, shared by the `milkrice` CLI and the MCP server.
 //!
 //! Output is compact plain text (or JSON) and always labels where content came from:
 //!   - NOTES       written by the user, verbatim
@@ -58,7 +58,7 @@ pub fn parse_since(s: &str) -> Result<DateTime<Utc>> {
 }
 
 pub fn resolve(store: &Store, id: &str) -> Result<Meeting> {
-    let full = store.resolve_id(id)?.ok_or_else(|| anyhow!("no meeting with id '{id}' (see: margin ls)"))?;
+    let full = store.resolve_id(id)?.ok_or_else(|| anyhow!("no meeting with id '{id}' (see: milkrice ls)"))?;
     store.get_meeting(&full)?.ok_or_else(|| anyhow!("meeting vanished"))
 }
 
@@ -84,7 +84,7 @@ pub fn list(store: &Store, query: Option<&str>, since: Option<DateTime<Utc>>, fo
         let f = folders
             .iter()
             .find(|f| f.name.eq_ignore_ascii_case(want.trim()) || f.id.starts_with(want.trim()))
-            .ok_or_else(|| anyhow!("no folder called '{want}' (see: margin folders)"))?;
+            .ok_or_else(|| anyhow!("no folder called '{want}' (see: milkrice folders)"))?;
         ms.retain(|m| m.folders.contains(&f.id));
     }
     ms.truncate(limit);
@@ -235,7 +235,7 @@ pub fn show(store: &Store, id: &str, sections: &[Section], as_json: bool) -> Res
         }
     }
     if !sections.contains(&Section::Transcript) && !segs.is_empty() {
-        let _ = writeln!(out, "\n({} transcript lines: margin tx {})", segs.len(), short(&m.id));
+        let _ = writeln!(out, "\n({} transcript lines: milkrice tx {})", segs.len(), short(&m.id));
     }
     Ok(out.trim_end().to_string())
 }
@@ -385,4 +385,4 @@ pub fn search(store: &Store, query: &str, scope: Scope, limit: usize, as_json: b
     Ok(out.trim_end().to_string())
 }
 
-pub const OVERVIEW: &str = "Margin stores meetings locally. Each meeting has three kinds of content, always labelled:\n  NOTES       typed by the user during the meeting (ground truth of what they cared about)\n  AI SUMMARY  written afterwards by an LLM (may contain errors)\n  TRANSCRIPT  local speech-to-text, speaker-labelled; the user's own lines are marked '(user)', other speakers are named or 'Speaker N'\nIDs are 8-char prefixes from `ls`.";
+pub const OVERVIEW: &str = "Milkrice stores meetings locally. Each meeting has three kinds of content, always labelled:\n  NOTES       typed by the user during the meeting (ground truth of what they cared about)\n  AI SUMMARY  written afterwards by an LLM (may contain errors)\n  TRANSCRIPT  local speech-to-text, speaker-labelled; the user's own lines are marked '(user)', other speakers are named or 'Speaker N'\nIDs are 8-char prefixes from `ls`.";

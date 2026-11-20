@@ -62,7 +62,7 @@ pub fn export_now(app: &AppHandle, id: &str) -> anyhow::Result<Option<std::path:
         return Ok(None); // nothing worth a note yet
     }
     let prev = (!m.export_path.is_empty()).then(|| std::path::PathBuf::from(&m.export_path));
-    let path = margin_core::obsidian::export(&m, &segs, &opts, prev.as_deref())?;
+    let path = milkrice_core::obsidian::export(&m, &segs, &opts, prev.as_deref())?;
     let p = path.to_string_lossy().to_string();
     if p != m.export_path {
         state.store.set_field(id, "export_path", &p)?;

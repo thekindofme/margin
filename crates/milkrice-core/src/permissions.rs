@@ -1,4 +1,4 @@
-//! macOS privacy permissions Margin needs, with status checks, native prompts and deep links
+//! macOS privacy permissions Milkrice needs, with status checks, native prompts and deep links
 //! straight to the right System Settings pane.
 use serde::{Deserialize, Serialize};
 

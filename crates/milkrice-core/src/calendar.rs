@@ -137,7 +137,7 @@ mod imp {
         TX.get_or_init(|| {
             let (tx, rx) = unbounded::<Job>();
             std::thread::Builder::new()
-                .name("margin-eventkit".into())
+                .name("milkrice-eventkit".into())
                 .spawn(move || {
                     let mut w = Worker { store: None, store_authorized: false, last_refresh: Instant::now() };
                     while let Ok(job) = rx.recv() {

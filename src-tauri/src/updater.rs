@@ -21,13 +21,13 @@ pub fn check(app: &AppHandle, manual: bool) {
 async fn run(app: &AppHandle, manual: bool) -> tauri_plugin_updater::Result<()> {
     let Some(update) = app.updater()?.check().await? else {
         if manual {
-            info(app, MessageDialogKind::Info, format!("Margin {} is up to date.", app.package_info().version));
+            info(app, MessageDialogKind::Info, format!("Milkrice {} is up to date.", app.package_info().version));
         }
         return Ok(());
     };
     log::info!("update available: {}", update.version);
     let msg = format!(
-        "Margin {} is available (you have {}).\n\nInstall it now? Margin will restart.",
+        "Milkrice {} is available (you have {}).\n\nInstall it now? Milkrice will restart.",
         update.version, update.current_version
     );
     let a = app.clone();
@@ -53,5 +53,5 @@ async fn run(app: &AppHandle, manual: bool) -> tauri_plugin_updater::Result<()> 
 }
 
 fn info(app: &AppHandle, kind: MessageDialogKind, msg: String) {
-    app.dialog().message(msg).title("Margin").kind(kind).show(|_| {});
+    app.dialog().message(msg).title("Milkrice").kind(kind).show(|_| {});
 }

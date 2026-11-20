@@ -1,6 +1,6 @@
 use chrono::{Duration, Utc};
-use margin_core::calendar::{self, CalendarAuth};
-use margin_core::detect;
+use milkrice_core::calendar::{self, CalendarAuth};
+use milkrice_core::detect;
 
 fn main() {
     let _ = env_logger::builder().filter_level(log::LevelFilter::Info).try_init();

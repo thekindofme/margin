@@ -1,4 +1,4 @@
-// Margin UI — vanilla JS, no build step.
+// Milkrice UI — vanilla JS, no build step.
 "use strict";
 
 const T = window.__TAURI__;
@@ -296,7 +296,7 @@ function renameFolder(f) {
 }
 function deleteFolder(f) {
   dialog(`<form><h4>Delete “${esc(f.name)}”?</h4>
-    <p class="hint" style="margin:0 0 12px">The folder goes away. Its ${f.count === 1 ? "note stays" : "notes stay"} in Margin.</p>
+    <p class="hint" style="margin:0 0 12px">The folder goes away. Its ${f.count === 1 ? "note stays" : "notes stay"} in Milkrice.</p>
     <div class="actions"><button type="button" class="btn" data-cancel>Cancel</button><button class="btn primary">Delete folder</button></div></form>`,
     async () => {
       await invoke("delete_folder", { id: f.id }).catch(fail);
@@ -315,16 +315,16 @@ async function fileNote(meetingId, folderId, on) {
 
 $("#lists").addEventListener("dragstart", (e) => {
   const m = e.target.closest("[data-meeting]");
-  if (m) { e.dataTransfer.setData("text/x-margin-note", m.dataset.meeting); e.dataTransfer.effectAllowed = "link"; }
+  if (m) { e.dataTransfer.setData("text/x-milkrice-note", m.dataset.meeting); e.dataTransfer.effectAllowed = "link"; }
 });
 $("#lists").addEventListener("dragover", (e) => {
   const f = e.target.closest("[data-folder]");
-  if (f && e.dataTransfer.types.includes("text/x-margin-note")) { e.preventDefault(); f.classList.add("drop"); }
+  if (f && e.dataTransfer.types.includes("text/x-milkrice-note")) { e.preventDefault(); f.classList.add("drop"); }
 });
 $("#lists").addEventListener("dragleave", (e) => e.target.closest("[data-folder]")?.classList.remove("drop"));
 $("#lists").addEventListener("drop", (e) => {
   const f = e.target.closest("[data-folder]");
-  const id = e.dataTransfer.getData("text/x-margin-note");
+  const id = e.dataTransfer.getData("text/x-milkrice-note");
   if (!f || !id) return;
   e.preventDefault();
   const name = S.folders.find((x) => x.id === f.dataset.folder)?.name;
@@ -382,15 +382,15 @@ function renderSysWarn() {
   const d = S.micDiag || {};
   let text, action;
   if (S.sysWarn === "mic-perm") {
-    text = "macOS isn't letting Margin use the microphone.";
+    text = "macOS isn't letting Milkrice use the microphone.";
     action = `<button class="btn small ember" id="sysFix">Allow microphone</button>`;
   } else if (S.sysWarn === "mic") {
-    const what = d.kind === "silent" ? `${esc(active)} isn't sending any sound` : `Margin can barely hear you on ${esc(active)}`;
+    const what = d.kind === "silent" ? `${esc(active)} isn't sending any sound` : `Milkrice can barely hear you on ${esc(active)}`;
     if (d.probing) { text = `${what}. Checking your other microphones…`; action = `<span class="spinner"></span>`; }
     else if (d.better) { text = `${what} — but <b>${esc(d.better)}</b> can hear you.`; action = `<button class="btn small ember" id="sysSwitch">Switch to ${esc(shortDevice(d.better))}</button><button class="btn small" id="sysDismiss">Ignore</button>`; }
     else { text = `${what}. Is it muted, or is another mic in use?`; action = `<button class="btn small ember" id="sysPick">Choose mic</button><button class="btn small" id="sysDismiss">Ignore</button>`; }
   } else {
-    text = "Only your microphone is being transcribed. Allow Margin to hear the other people on the call.";
+    text = "Only your microphone is being transcribed. Allow Milkrice to hear the other people on the call.";
     action = `<button class="btn small ember" id="sysFix">Fix in 10 seconds</button>`;
   }
   el.innerHTML = `<div class="syswarn"><span>${text}</span>${action}</div>`;
@@ -401,7 +401,7 @@ function renderSysWarn() {
   const dm = $("#sysDismiss");
   if (dm) dm.onclick = () => { S.sysWarn = false; renderSysWarn(); };
   const fx = $("#sysFix");
-  if (fx) fx.onclick = () => openPermsSheet(S.sysWarn === "mic-perm" ? "Margin needs your microphone" : "Hear everyone on the call");
+  if (fx) fx.onclick = () => openPermsSheet(S.sysWarn === "mic-perm" ? "Milkrice needs your microphone" : "Hear everyone on the call");
 }
 function autoBannerHtml() {
   const m = S.meetings.find((x) => x.id === S.rec.meeting_id);
@@ -477,9 +477,9 @@ function renderHome(v) {
   const evs = S.events.filter((x) => new Date(x.event.end) > now && (x.real || !S.settings?.only_real_meetings)).slice(0, 6);
   const calOk = S.perms?.calendar === "granted";
   let h = `<div class="page"><h1 class="hello">${greet}${esc(name)}</h1>
-    <p class="hello-sub">${S.rec.recording ? "Margin is listening." : evs.length ? `${evs.length} meeting${evs.length > 1 ? "s" : ""} coming up.` : "Your notes, kept on this Mac."}</p>`;
+    <p class="hello-sub">${S.rec.recording ? "Milkrice is listening." : evs.length ? `${evs.length} meeting${evs.length > 1 ? "s" : ""} coming up.` : "Your notes, kept on this Mac."}</p>`;
   const missing = ["microphone", "system_audio", "calendar"].filter((k) => S.perms && S.perms[k] !== "granted");
-  if (missing.length) h += `<div class="callout setup">${ICON.spark}<div style="flex:1">Margin can't hear everything yet — ${missing.length} permission${missing.length > 1 ? "s" : ""} to go.</div><button class="btn small ember" id="setupPerms">Finish setup</button></div><div style="height:14px"></div>`;
+  if (missing.length) h += `<div class="callout setup">${ICON.spark}<div style="flex:1">Milkrice can't hear everything yet — ${missing.length} permission${missing.length > 1 ? "s" : ""} to go.</div><button class="btn small ember" id="setupPerms">Finish setup</button></div><div style="height:14px"></div>`;
   h += `<label class="ask-all">${ICON.spark}<input id="askAll" placeholder="Ask your recent meetings…" value="${esc(S.homeQ || "")}" /></label>`;
   if (S.homeAsking) h += `<div class="answer"><span class="busy"><span class="spinner"></span>Reading your meetings…</span></div>`;
   else if (S.homeAnswer) h += `<div class="answer md">${md(S.homeAnswer)}</div>`;
@@ -500,7 +500,7 @@ function renderHome(v) {
     }
     h += `</div>`;
   } else {
-    h += `<div class="callout">${ICON.cal}<div>${calOk ? "Nothing else on your calendar today." : "Connect your calendar and Margin will nudge you as meetings start — and stop when they end. It reads the calendars already on this Mac; no sign-in."}</div></div>`;
+    h += `<div class="callout">${ICON.cal}<div>${calOk ? "Nothing else on your calendar today." : "Connect your calendar and Milkrice will nudge you as meetings start — and stop when they end. It reads the calendars already on this Mac; no sign-in."}</div></div>`;
   }
   h += `<div class="section-h"><h3>Recent notes</h3></div>`;
   if (S.meetings.length) {
@@ -509,7 +509,7 @@ function renderHome(v) {
         <span style="min-width:0"><div class="nt">${esc(m.title || "Untitled")}</div><div class="ns">${esc((m.snippet || "").replace(/[#*\-\[\]]/g, "").trim() || "No notes yet")}</div></span></button>`;
     }
   } else {
-    h += `<div class="empty"><img class="illus" src="img/empty-state.jpg" alt=""><p>No notes yet. Start one with <b>New note</b>, or let Margin catch your next meeting.</p></div>`;
+    h += `<div class="empty"><img class="illus" src="img/empty-state.jpg" alt=""><p>No notes yet. Start one with <b>New note</b>, or let Milkrice catch your next meeting.</p></div>`;
   }
   h += `</div>`;
   v.innerHTML = h + dockHtml();
@@ -560,7 +560,7 @@ function renderAutoMarker() {
     mk = document.createElement("button");
     mk.id = "autoMark";
     mk.className = "auto-mark";
-    mk.title = "Auto-record is on: Margin starts recording calendar meetings by itself";
+    mk.title = "Auto-record is on: Milkrice starts recording calendar meetings by itself";
     mk.innerHTML = `<span class="rec-dot"></span>Auto-record`;
     mk.onclick = toggleAutoPop;
     foot.insertBefore(mk, foot.querySelector(".local-badge"));
@@ -574,7 +574,7 @@ function toggleAutoPop() {
   pop.id = "autoPop";
   pop.className = "auto-pop";
   pop.innerHTML = `<b>Auto-record is on</b>
-    <p>Margin starts recording calendar meetings with people in them a minute before they begin, and tells you when it does.</p>
+    <p>Milkrice starts recording calendar meetings with people in them a minute before they begin, and tells you when it does.</p>
     <button class="btn small primary" id="autoOff">Turn off auto-record</button>
     <p class="hint">You'll get a notification instead, and choose each time.</p>`;
   document.querySelector(".sidebar").appendChild(pop);
@@ -588,14 +588,14 @@ async function turnOffAutoRecord() {
     renderBadge();
     renderBanner(true);
     if (S.view === "settings") render();
-    toast("Auto-record is off. Margin will notify you instead.");
+    toast("Auto-record is off. Milkrice will notify you instead.");
   } catch (e) { fail(e); }
 }
 
 // ------------------------------------------------------------------ permissions
 const PERMS = [
   ["microphone", "Microphone", "Hears your side of the conversation."],
-  ["system_audio", "Other participants", "Hears everyone else on the call (Screen & System Audio Recording). Margin never records your screen."],
+  ["system_audio", "Other participants", "Hears everyone else on the call (Screen & System Audio Recording). Milkrice never records your screen."],
   ["calendar", "Calendar", "Knows when meetings start and who's in them. Reads calendars already on this Mac."],
   ["notifications", "Notifications", "Taps you on the shoulder when a meeting starts or notes are ready."],
 ];
@@ -628,14 +628,14 @@ function permsHtml() {
     const help = S.permHelp[k];
     let action;
     if (ok) action = `<span class="badge sage">${ICON.check.replace("<svg", '<svg style="width:11px;height:11px;stroke-width:2.4"')} Allowed</span>`;
-    else if (help === "restart") action = `<button class="btn small" data-perm-open="${k}">Open Settings</button><button class="btn small primary" id="permRestart">Restart Margin</button>`;
+    else if (help === "restart") action = `<button class="btn small" data-perm-open="${k}">Open Settings</button><button class="btn small primary" id="permRestart">Restart Milkrice</button>`;
     else action = `<button class="btn small ${k === "microphone" || k === "system_audio" ? "primary" : ""}" data-perm="${k}">${st === "denied" ? "Open Settings" : "Allow"}</button>`;
     const hint = !ok && help
       ? `<div class="perm-hint">${k === "system_audio"
-          ? `System Settings is open at <b>Privacy &amp; Security → Screen &amp; System Audio Recording</b>. Switch <b>Margin</b> on — if it isn't listed, click <b>+</b> and pick Margin from the Finder window that just opened. macOS only applies this after a restart, so then press <b>Restart Margin</b>.`
+          ? `System Settings is open at <b>Privacy &amp; Security → Screen &amp; System Audio Recording</b>. Switch <b>Milkrice</b> on — if it isn't listed, click <b>+</b> and pick Milkrice from the Finder window that just opened. macOS only applies this after a restart, so then press <b>Restart Milkrice</b>.`
           : st === "denied"
-            ? `macOS remembers an earlier “Don't Allow”. In <b>Privacy &amp; Security → ${PERM_PANE[k]}</b> (now open), switch <b>Margin</b> on.`
-            : `macOS didn't show its prompt. Click <b>Allow</b> again; if nothing appears, quit and reopen Margin and try once more.`}</div>`
+            ? `macOS remembers an earlier “Don't Allow”. In <b>Privacy &amp; Security → ${PERM_PANE[k]}</b> (now open), switch <b>Milkrice</b> on.`
+            : `macOS didn't show its prompt. Click <b>Allow</b> again; if nothing appears, quit and reopen Milkrice and try once more.`}</div>`
       : "";
     return `<div class="perm ${ok ? "ok" : ""}"><span class="status ${ok ? "ok" : ""}"></span>
       <div class="pi"><b>${name}</b><span>${why}</span></div><div class="perm-act">${action}</div>${hint}</div>`;
@@ -657,13 +657,13 @@ function renderPermsInPlace() {
 }
 
 // Poll while a permissions panel is on screen so ticks appear as soon as the user flips a switch.
-// System Settings usually covers Margin while the user flips a switch, so keep polling even
-// when the window is occluded, and re-check the moment Margin is focused again.
+// System Settings usually covers Milkrice while the user flips a switch, so keep polling even
+// when the window is occluded, and re-check the moment Milkrice is focused again.
 setInterval(() => { if (document.querySelector(".perms-slot")) refreshPerms(); }, 1500);
 window.addEventListener("focus", () => refreshPerms().then(() => { renderPermsInPlace(); renderSysWarn(); }));
 
 function openPermsSheet(title) {
-  const dlg = dialog(`<form><h4>${esc(title || "Let Margin listen")}</h4>
+  const dlg = dialog(`<form><h4>${esc(title || "Let Milkrice listen")}</h4>
     <p class="hint" style="margin:0 0 10px">Audio is processed on this Mac and never uploaded. Each switch takes a second.</p>
     <div class="perms-slot">${permsHtml()}</div>
     <div class="actions"><button type="button" class="btn" data-cancel>Done</button></div></form>`, () => {});
@@ -738,7 +738,7 @@ function renderNote(v, soft) {
         ${m.notes.trim() ? `<div class="yours"><b style="color:var(--ink)">Your notes</b>\n${esc(m.notes.trim())}</div>` : ""}`;
     } else {
       const noProvider = !S.settings?.provider && !m.enhanced && !isRec && d.segments.length > 0;
-      h += (noProvider ? choosePromptHtml() : "") + `<div class="sheet"><textarea id="notesEditor" class="editor" spellcheck="true" placeholder="${isRec ? "Jot down what matters — Margin listens and fills in the rest…" : "Write notes here. Start recording and Margin will turn them into full notes."}">${esc(m.notes)}</textarea></div>
+      h += (noProvider ? choosePromptHtml() : "") + `<div class="sheet"><textarea id="notesEditor" class="editor" spellcheck="true" placeholder="${isRec ? "Jot down what matters — Milkrice listens and fills in the rest…" : "Write notes here. Start recording and Milkrice will turn them into full notes."}">${esc(m.notes)}</textarea></div>
         <div class="note-actions">
           ${m.enhanced ? `<button class="btn small" id="toggleMine">Show AI notes</button>` : ""}
           ${!isRec && (d.segments.length || m.notes.trim()) ? `<button class="btn small ${m.enhanced ? "" : "primary"}" id="regen" ${d.busy ? "disabled" : ""}>${ICON.spark} ${m.enhanced ? "Regenerate" : "Write AI notes"}</button>${formatHtml(tplOpts)}` : ""}
@@ -839,7 +839,7 @@ function regenConfirmHtml() {
 
 function choosePromptHtml() {
   return `<div class="callout choose">${ICON.spark}<div style="flex:1"><b>Choose who writes your notes</b>
-    <span>Margin hasn't written AI notes for this meeting because you haven't picked an AI yet. Nothing has left this Mac.</span></div>
+    <span>Milkrice hasn't written AI notes for this meeting because you haven't picked an AI yet. Nothing has left this Mac.</span></div>
     <button class="btn small ember" id="chooseProv">Choose</button></div>`;
 }
 
@@ -848,7 +848,7 @@ async function openProviderChooser(after) {
   if (!S.providers) await loadProviders(false).catch(() => {});
   const avail = (S.providers || []).filter((p) => p.available && p.signed_in);
   const dlg = dialog(`<form><h4>Who writes your notes?</h4>
-    <p class="hint" style="margin:0 0 10px">Margin sends the transcript text, never audio, to the AI you pick. Ollama keeps it all on this Mac. Margin remembers your choice.</p>
+    <p class="hint" style="margin:0 0 10px">Milkrice sends the transcript text, never audio, to the AI you pick. Ollama keeps it all on this Mac. Milkrice remembers your choice.</p>
     <div class="prov-pick">${avail.length ? avail.map((p) => `<button type="button" class="provider" data-pick="${p.id}"><span class="status ok"></span><div class="pi"><b>${esc(p.name)}</b><span>${esc(p.id === "ollama" ? "On this Mac. Nothing leaves it." : p.detail)}</span></div></button>`).join("")
       : `<p class="hint">No AI found. Sign in to Claude Code (<code>claude</code>) or Codex (<code>codex login</code>), or run Ollama, then open Settings → AI notes.</p>`}</div>
     <div class="actions"><button type="button" class="btn" data-cancel>Not now</button></div></form>`, () => {});
@@ -1072,7 +1072,7 @@ function renameSpeaker(key) {
   const names = [...new Set([...m.attendees.map((a) => a.name), ...Object.values(m.speakers)])].filter(Boolean);
   const guessed = isGuessed(key, m);
   const dlg = dialog(`<form><h4>${guessed ? `Is this ${esc(m.speakers[key])}?` : "Who is this?"}</h4>
-    ${guessed ? `<p class="hint" style="margin:0 0 10px">Margin guessed this name from the conversation. Confirm it, or type the right name.</p>` : ""}
+    ${guessed ? `<p class="hint" style="margin:0 0 10px">Milkrice guessed this name from the conversation. Confirm it, or type the right name.</p>` : ""}
     <input class="field" name="n" value="${esc(m.speakers[key] || (key === "me" ? S.settings?.user_name || "" : ""))}" placeholder="Name" autofocus />
     ${names.length ? `<div class="sugs">${names.map((n) => `<button type="button" class="btn small" data-n="${esc(n)}">${esc(n)}</button>`).join("")}</div>` : ""}
     <p class="hint">Giving two speakers the same name merges them.</p>
@@ -1090,7 +1090,7 @@ function moreMenu() {
   dialog(`<form><h4>${esc(m.title || "This note")}</h4>
     <div style="display:grid;gap:8px">
       ${S.settings.obsidian ? `<button type="button" class="btn" id="mxObs">Open in Obsidian</button>` : ""}
-      <button type="button" class="btn" id="mxSave">Export Markdown to Documents/Margin</button>
+      <button type="button" class="btn" id="mxSave">Export Markdown to Documents/Milkrice</button>
       <button type="button" class="btn" id="mxCopyAll">Copy everything (Markdown)</button>
       <button type="button" class="btn" id="mxCopy">Copy transcript</button>
       <button type="button" class="btn danger" id="mxDel">Delete note</button>
@@ -1240,7 +1240,7 @@ async function openDevicePicker() {
     ${row("", "System default", d.default_input || "Follows macOS")}
     ${d.inputs.filter((n) => n).map((n) => row(n, n, n === d.default_input ? "Current macOS default" : "")).join("")}
     <button class="link dev-find" id="devFind">Which mic can hear me?</button>
-    <div class="dev-hint" id="devHint">${S.rec.recording ? "Switching keeps your transcript — Margin picks up right where it left off." : "Speak — the bars should move."}</div>
+    <div class="dev-hint" id="devHint">${S.rec.recording ? "Switching keeps your transcript — Milkrice picks up right where it left off." : "Speak — the bars should move."}</div>
     <div class="dev-h" style="margin-top:6px">Other participants</div>
     <div class="dev-row static"><span class="status ${S.perms?.system_audio === "granted" && d.capture_system ? "ok" : ""}"></span>
       <span class="dev-name"><b>All system audio</b><span>${d.capture_system ? `Whatever plays through ${esc(d.default_output || "your speakers")} — any app, any output.` : "Off in Settings → Audio."}</span></span>
@@ -1288,7 +1288,7 @@ function bindDock() {
   if (st) st.onclick = async () => {
     if (S.perms && S.perms.microphone !== "granted") {
       await grantPerm("microphone");
-      if (S.perms.microphone !== "granted") { openPermsSheet("Margin needs your microphone"); return; }
+      if (S.perms.microphone !== "granted") { openPermsSheet("Milkrice needs your microphone"); return; }
     }
     st.disabled = true;
     toast("Starting…", 1200);
@@ -1320,7 +1320,7 @@ function paintLevels() {
   paint($("#testBars"), live ? S.levels.mic : S.testLevel);
   paint($("#obtBars"), live ? S.levels.mic : 0);
   const hint = $("#devHint");
-  if (hint && !live && S.testSilent) hint.innerHTML = `macOS is giving Margin silence from this mic. <button class="link" id="devMicFix">Fix</button>`, ($("#devMicFix").onclick = () => { closeDevicePicker(); openPermsSheet("Margin needs your microphone"); });
+  if (hint && !live && S.testSilent) hint.innerHTML = `macOS is giving Milkrice silence from this mic. <button class="link" id="devMicFix">Fix</button>`, ($("#devMicFix").onclick = () => { closeDevicePicker(); openPermsSheet("Milkrice needs your microphone"); });
 }
 
 // ------------------------------------------------------------------ settings
@@ -1373,9 +1373,9 @@ const sw = (name, on) => `<button class="switch ${on ? "on" : ""}" data-switch="
 
 function renderSettings(v) {
   const s = S.settings;
-  let h = `<div class="page settings"><h1>Settings</h1><p class="desc">Audio and transcripts stay on this Mac. Only when Margin writes notes does the text go to the AI you pick below — choose Ollama to keep even that on-device.</p>
+  let h = `<div class="page settings"><h1>Settings</h1><p class="desc">Audio and transcripts stay on this Mac. Only when Milkrice writes notes does the text go to the AI you pick below — choose Ollama to keep even that on-device.</p>
 
-  <h2>Permissions</h2><p class="desc">macOS asks once for each. Margin takes you straight to the right switch.</p>
+  <h2>Permissions</h2><p class="desc">macOS asks once for each. Milkrice takes you straight to the right switch.</p>
   <div class="perms-slot">${permsHtml()}</div>
 
   <h2>Transcription</h2><p class="desc">Pick an open-weights speech model. Bigger is more accurate; smaller is faster.</p>
@@ -1383,22 +1383,22 @@ function renderSettings(v) {
     <select class="field" id="langSel">${[["auto", "Auto-detect"], ...LANGS.slice(1)].map(([k, n]) => `<option value="${k}" ${k === s.language ? "selected" : ""}>${n}</option>`).join("")}</select></div>
   <div id="modelsBox">${modelsHtml()}</div>
 
-  <h2>AI notes</h2><p class="desc">Margin uses an AI you already have — no API keys, no Margin account. Your transcript is sent only to the provider you choose.</p>
+  <h2>AI notes</h2><p class="desc">Milkrice uses an AI you already have — no API keys, no Milkrice account. Your transcript is sent only to the provider you choose.</p>
   <div id="provBox">${providersHtml()}</div>
   <div class="row"><div class="rl"><b>Default template</b><span>How notes are structured; change per meeting too.</span></div>
     <select class="field" id="tplDefault">${S.templates.map((t) => `<option value="${t.id}" ${t.id === s.default_template ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></div>
   <div class="row"><div class="rl"><b>Write notes when a meeting ends</b><span>Also names speakers and titles the meeting.</span></div>${sw("auto_enhance", s.auto_enhance)}</div>
 
-  <h2>Calendar &amp; meetings</h2><p class="desc">Margin only ever <b>reads</b> calendars. Pick the least access that works for you.</p>
+  <h2>Calendar &amp; meetings</h2><p class="desc">Milkrice only ever <b>reads</b> calendars. Pick the least access that works for you.</p>
   <div id="calSources"><p class="hint">Checking calendars…</p></div>
   <div class="row"><div class="rl"><b>When a meeting starts</b><span>Notify you, start recording on its own, or stay quiet.</span></div>${seg("calendar_mode", s.calendar_mode, [["notify", "Notify me"], ["auto", "Record automatically"], ["off", "Off"]])}</div>
-  ${s.calendar_mode === "auto" ? `<p class="auto-ack"><span class="rec-dot"></span><span>Auto-record is on. Margin records meetings with people in them by itself, shows <b>Auto-record</b> in the sidebar and menu bar while it's on, and tells you each time it starts. Let the people you meet know they're being transcribed.</span></p>` : ""}
+  ${s.calendar_mode === "auto" ? `<p class="auto-ack"><span class="rec-dot"></span><span>Auto-record is on. Milkrice records meetings with people in them by itself, shows <b>Auto-record</b> in the sidebar and menu bar while it's on, and tells you each time it starts. Let the people you meet know they're being transcribed.</span></p>` : ""}
   <div class="row"><div class="rl"><b>Stop when the meeting ends</b><span>After the event's end time once the room goes quiet.</span></div>${sw("auto_stop", s.auto_stop)}</div>
-  <div class="row"><div class="rl"><b>Open at login</b><span>Margin waits in the menu bar so it can catch your first meeting of the day.</span></div><button class="switch" id="autostartSw" role="switch" aria-checked="false"></button></div>
+  <div class="row"><div class="rl"><b>Open at login</b><span>Milkrice waits in the menu bar so it can catch your first meeting of the day.</span></div><button class="switch" id="autostartSw" role="switch" aria-checked="false"></button></div>
   <div class="row"><div class="rl"><b>Notice unscheduled calls</b><span>Zoom, Teams, Webex, Slack, FaceTime… using your mic.</span></div>${sw("detect_calls", s.detect_calls)}</div>
   <div class="row"><div class="rl"><b>Only meetings with people</b><span>Skip focus blocks and reminders without guests or a call link.</span></div>${sw("only_real_meetings", s.only_real_meetings)}</div>
 
-  <h2>Obsidian &amp; second brain</h2><p class="desc">Mirror every meeting into your vault as plain Markdown — summary, your notes and transcript, with attendees as [[links]]. Anything you add outside Margin's block is never touched.</p>
+  <h2>Obsidian &amp; second brain</h2><p class="desc">Mirror every meeting into your vault as plain Markdown — summary, your notes and transcript, with attendees as [[links]]. Anything you add outside Milkrice's block is never touched.</p>
   <div id="obsBox"><p class="hint">Looking for vaults…</p></div>
 
   <h2>Agents</h2><p class="desc">Let Claude Code, Codex or any MCP client read your meetings. Your notes, AI summaries and speech transcripts stay clearly labelled so agents never confuse them.</p>
@@ -1471,9 +1471,9 @@ async function loadCalendarSources() {
       <div class="pi"><b>Calendars on this Mac</b><span>${macOk ? `${c.event_count} upcoming events${c.calendars_with_events.length ? ` from ${esc(c.calendars_with_events.join(", "))}` : ""}. Includes any account added in System Settings → Internet Accounts.` : "Needs Calendar permission (Permissions above)."}</span></div>
       ${macOk ? '<span class="badge sage">Connected</span>' : ""}</div>
     ${feeds}
-    <details class="gcal" ${c.feeds.length ? "" : "open"}><summary><b>Add Google Calendar</b> <span class="hint">— two ways, both without giving Margin your Google password</span></summary>
+    <details class="gcal" ${c.feeds.length ? "" : "open"}><summary><b>Add Google Calendar</b> <span class="hint">— two ways, both without giving Milkrice your Google password</span></summary>
       <div class="gcal-body">
-        <p><b>Least access (recommended):</b> paste your calendar's <i>secret address in iCal format</i>. Margin can only read that one calendar, can't change anything, and you can revoke it any time by resetting the address in Google.</p>
+        <p><b>Least access (recommended):</b> paste your calendar's <i>secret address in iCal format</i>. Milkrice can only read that one calendar, can't change anything, and you can revoke it any time by resetting the address in Google.</p>
         <ol class="steps-mini">
           <li>Open <a href="#" data-open="https://calendar.google.com/calendar/u/0/r/settings">Google Calendar settings</a> → your calendar under <b>Settings for my calendars</b>.</li>
           <li>Scroll to <b>Integrate calendar</b> and copy <b>Secret address in iCal format</b>.</li>
@@ -1484,8 +1484,8 @@ async function loadCalendarSources() {
           <input class="field" id="feedEmail" placeholder="Your email on that calendar (optional)" />
           <button class="btn small primary" id="feedAdd">Add</button>
         </div>
-        <p class="hint">Your email lets Margin skip meetings you've declined. The address is stored only on this Mac.</p>
-        <p><b>Or, no new access at all:</b> add your Google account in <a href="#" data-open="x-apple.systempreferences:com.apple.Internet-Accounts-Settings.extension">System Settings → Internet Accounts</a> with Calendars on. Margin then sees it through the Calendar permission it already has.</p>
+        <p class="hint">Your email lets Milkrice skip meetings you've declined. The address is stored only on this Mac.</p>
+        <p><b>Or, no new access at all:</b> add your Google account in <a href="#" data-open="x-apple.systempreferences:com.apple.Internet-Accounts-Settings.extension">System Settings → Internet Accounts</a> with Calendars on. Milkrice then sees it through the Calendar permission it already has.</p>
       </div></details>`;
   box.querySelectorAll("[data-open]").forEach((a) => (a.onclick = (e) => { e.preventDefault(); T.opener?.openUrl(a.dataset.open).catch(() => window.open(a.dataset.open)); }));
   box.querySelectorAll("[data-feed-rm]").forEach((b) => (b.onclick = async () => { await invoke("remove_calendar_feed", { id: b.dataset.feedRm }).catch(fail); S.settings = await invoke("get_settings"); loadCalendarSources(); setTimeout(loadEvents, 1500); }));
@@ -1514,10 +1514,10 @@ async function loadAgents() {
     <div class="pi"><b>${name}</b><span>${desc}</span></div>
     ${ok ? '<span class="badge sage">Connected</span>' : avail ? `<button class="btn small" data-agent="${key}">${label}</button>` : '<span class="hint">Not installed</span>'}</div>`;
   box.innerHTML =
-    row("cli", "<code>margin</code> command", `Token-efficient CLI for any agent or script: <code>margin ls</code>, <code>show</code>, <code>tx</code>, <code>search</code>. Installs to ${esc(a.cli_path)}.`, a.cli_installed, a.cli_bundled, "Install") +
-    row("claude", "Claude Code", "Adds the Margin MCP server and the margin skill.", a.claude_connected, a.claude_available, "Connect") +
-    row("codex", "Codex", "Adds the Margin MCP server and the margin skill.", a.codex_connected, a.codex_available, "Connect") +
-    `<p class="hint">Any other MCP client: run <code>margin mcp</code> over stdio. Access is read-only.</p>`;
+    row("cli", "<code>milkrice</code> command", `Token-efficient CLI for any agent or script: <code>milkrice ls</code>, <code>show</code>, <code>tx</code>, <code>search</code>. Installs to ${esc(a.cli_path)}.`, a.cli_installed, a.cli_bundled, "Install") +
+    row("claude", "Claude Code", "Adds the Milkrice MCP server and the milkrice skill.", a.claude_connected, a.claude_available, "Connect") +
+    row("codex", "Codex", "Adds the Milkrice MCP server and the milkrice skill.", a.codex_connected, a.codex_available, "Connect") +
+    `<p class="hint">Any other MCP client: run <code>milkrice mcp</code> over stdio. Access is read-only.</p>`;
   box.querySelectorAll("[data-agent]").forEach((b) => (b.onclick = async () => {
     b.disabled = true; b.textContent = "Connecting…";
     try { toast(await invoke("agent_connect", { target: b.dataset.agent }), 3500); } catch (e) { fail(e); }
@@ -1528,7 +1528,7 @@ async function loadAgents() {
 function providersHtml() {
   if (!S.providers) return `<p class="hint"><span class="spinner" style="display:inline-block;vertical-align:-2px"></span> Looking for Claude Code, Codex and Ollama…</p>`;
   const sel = S.settings.provider;
-  const head = sel ? "" : `<div class="callout choose" style="margin-bottom:8px">${ICON.spark}<div><b>No AI chosen. AI notes are off.</b><span>Pick one below and Margin will remember it. Until then nothing is sent anywhere.</span></div></div>`;
+  const head = sel ? "" : `<div class="callout choose" style="margin-bottom:8px">${ICON.spark}<div><b>No AI chosen. AI notes are off.</b><span>Pick one below and Milkrice will remember it. Until then nothing is sent anywhere.</span></div></div>`;
   return head + S.providers.map((p) => {
     const on = sel === p.id;
     return `<div class="provider ${on ? "on" : ""}"><span class="status ${p.available && p.signed_in ? "ok" : ""}"></span>
@@ -1624,15 +1624,15 @@ function renderOnboarding(v) {
   const pct = dling && S.progress[dling.id].total ? Math.round((S.progress[dling.id].done / S.progress[dling.id].total) * 100) : 0;
   v.innerHTML = `<div class="onboard"><img class="illus" src="img/onboarding.jpg" alt="">
     <h1>Notes that write themselves.<br>Audio never leaves your Mac.</h1>
-    <p>Margin transcribes your meetings with an open model on this Mac and turns your rough jottings into clean notes. No account, no bots in your calls. To write the notes, the transcript text goes to the AI you choose — or stays here with Ollama.</p>
+    <p>Milkrice transcribes your meetings with an open model on this Mac and turns your rough jottings into clean notes. No account, no bots in your calls. To write the notes, the transcript text goes to the AI you choose — or stays here with Ollama.</p>
     <div class="steps" id="obModels">
       <div class="step ${hasModel ? "done" : ""}"><span class="n">${hasModel ? "✓" : 1}</span><div><b>Download a speech model</b><span>${hasModel ? "Ready." : dling ? `Downloading ${esc(dling.name)}… ${pct}%` : "Parakeet v2 (451 MB) — fast and accurate for English."}</span></div>
         ${hasModel ? "" : dling ? `<div class="progress" style="width:120px"><i style="width:${pct}%"></i></div>` : `<div style="display:flex;gap:6px"><button class="btn small" id="obMore">Other models</button><button class="btn small primary" id="obDl">Download</button></div>`}</div>
-      <div class="step ${permsOk ? "done" : ""}" style="grid-template-columns:28px 1fr"><span class="n">${permsOk ? "✓" : 2}</span><div><b>Let Margin listen</b><span>One click each — Margin opens the right switch for you.</span>
+      <div class="step ${permsOk ? "done" : ""}" style="grid-template-columns:28px 1fr"><span class="n">${permsOk ? "✓" : 2}</span><div><b>Let Milkrice listen</b><span>One click each — Milkrice opens the right switch for you.</span>
         <div class="perms-slot" style="margin-top:10px">${permsHtml()}</div></div></div>
       ${S.vaults?.length ? `<div class="step ${S.settings.obsidian ? "done" : ""}"><span class="n">${S.settings.obsidian ? "✓" : "★"}</span><div><b>Keep notes in Obsidian <span class="hint">(optional)</span></b><span>${S.settings.obsidian ? `Every meeting is mirrored into ${esc(S.settings.obsidian.root.split("/").pop())}/${esc(S.settings.obsidian.folder)}.` : `Found your vault “${esc(S.vaults[0].name)}”. Mirror every meeting there as Markdown.`}</span></div>
         ${S.settings.obsidian ? "" : `<button class="btn small" id="obVault">Use it</button>`}</div>` : ""}
-      <div class="step ${ai ? "done" : ""}"><span class="n">${ai ? "✓" : 3}</span><div><b>Who writes your notes?</b><span>${chosen ? `${esc(chosen.name)}: ${chosen.id === "ollama" ? "on this Mac, nothing leaves it." : "the transcript text is sent to it when notes are written. Audio never is."} <button class="link" id="obChange">Change</button>` : skipped ? `No AI for now. Margin only transcribes, and nothing leaves this Mac. Pick one later in Settings → AI notes. <button class="link" id="obChange">Choose now</button>` : S.providers ? (avail.length ? "Pick one and Margin remembers it. Claude and Codex use your existing subscription; Ollama keeps everything on this Mac." : "Sign in to Claude Code (claude) or Codex (codex login), or run Ollama.") : "Checking…"}</span>
+      <div class="step ${ai ? "done" : ""}"><span class="n">${ai ? "✓" : 3}</span><div><b>Who writes your notes?</b><span>${chosen ? `${esc(chosen.name)}: ${chosen.id === "ollama" ? "on this Mac, nothing leaves it." : "the transcript text is sent to it when notes are written. Audio never is."} <button class="link" id="obChange">Change</button>` : skipped ? `No AI for now. Milkrice only transcribes, and nothing leaves this Mac. Pick one later in Settings → AI notes. <button class="link" id="obChange">Choose now</button>` : S.providers ? (avail.length ? "Pick one and Milkrice remembers it. Claude and Codex use your existing subscription; Ollama keeps everything on this Mac." : "Sign in to Claude Code (claude) or Codex (codex login), or run Ollama.") : "Checking…"}</span>
           ${!ai && S.providers ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">${avail.map((p) => `<button class="btn small" data-ob-prov="${p.id}">${esc(p.name)}</button>`).join("")}<button class="btn small quiet" id="obNoAi">Not now</button></div>` : ""}</div>
         ${ai || !S.providers || avail.length ? "" : `<button class="btn small" id="obAi">Check again</button>`}</div>
     </div>
@@ -1662,7 +1662,7 @@ function renderObTest(v) {
   const lines = t.lines.map((s) => `<div class="ob-line ${s.speaker === "me" ? "me" : ""}"><span class="ts">${fmtTs(s.start_ms)}</span><span>${esc(s.text)}</span></div>`).join("");
   let body, actions;
   if (t.phase === "ready") {
-    body = `<p>Margin will record into a scratch note for ${OB_TEST_SECS} seconds. Say something out loud, like what you're working on today, and watch the words appear. Everything stays on this Mac.</p>`;
+    body = `<p>Milkrice will record into a scratch note for ${OB_TEST_SECS} seconds. Say something out loud, like what you're working on today, and watch the words appear. Everything stays on this Mac.</p>`;
     actions = `<button class="btn ember" id="obtStart"><span class="dot-w"></span>Start the test</button><button class="btn" id="obtSkip">Skip</button>`;
   } else if (t.phase === "recording") {
     body = `<div class="ob-live"><span class="rec-badge"><span class="rec-dot"></span>REC</span><span class="ob-count" id="obtCount">${t.left}s</span>
@@ -1672,13 +1672,13 @@ function renderObTest(v) {
   } else {
     const heard = t.lines.length > 0;
     body = `<div class="ob-lines">${lines || ""}</div>
-      ${heard ? `<p>That's Margin hearing you, transcribed on this Mac. You're ready for your next meeting.</p>`
-        : `<p>Margin didn't hear anything. Check the mic is the right one and isn't muted, then try again.</p>`}`;
+      ${heard ? `<p>That's Milkrice hearing you, transcribed on this Mac. You're ready for your next meeting.</p>`
+        : `<p>Milkrice didn't hear anything. Check the mic is the right one and isn't muted, then try again.</p>`}`;
     actions = heard
       ? `<button class="btn primary" id="obtDone">Looks good</button><button class="link" id="obtKeep">Keep this test note</button>`
       : `<button class="btn primary" id="obtRetry">Try again</button><button class="btn" id="obtMic">Choose mic</button><button class="link" id="obtDoneAnyway">Finish anyway</button>`;
   }
-  v.innerHTML = `<div class="onboard ob-test"><h1>${t.phase === "done" ? (t.lines.length ? "Margin can hear you." : "Nothing heard yet.") : "Say something."}</h1>
+  v.innerHTML = `<div class="onboard ob-test"><h1>${t.phase === "done" ? (t.lines.length ? "Milkrice can hear you." : "Nothing heard yet.") : "Say something."}</h1>
     ${body}<div class="ob-actions">${actions}</div></div>`;
   const on = (id, fn) => { const el = $("#" + id); if (el) el.onclick = fn; };
   on("obtStart", startObTest);
@@ -1697,10 +1697,10 @@ async function startObTest() {
   const v = $("#view");
   if (S.perms && S.perms.microphone !== "granted") {
     await grantPerm("microphone");
-    if (S.perms.microphone !== "granted") { openPermsSheet("Margin needs your microphone"); return; }
+    if (S.perms.microphone !== "granted") { openPermsSheet("Milkrice needs your microphone"); return; }
   }
   try {
-    const m = await invoke("create_meeting", { title: "Margin mic test" });
+    const m = await invoke("create_meeting", { title: "Milkrice mic test" });
     S.obTest = { phase: "recording", lines: [], id: m.id, left: OB_TEST_SECS };
     renderObTest(v);
     await invoke("start_recording", { id: m.id });
@@ -1735,7 +1735,7 @@ async function finishOnboarding(keepTest) {
   const keptId = keepTest ? S.obTest?.id : null;
   S.obTest = null;
   await saveSettings({ onboarded: true });
-  // Launch at login is on by default so Margin is there for the first meeting of the day.
+  // Launch at login is on by default so Milkrice is there for the first meeting of the day.
   invoke("autostart_set", { on: true }).catch(() => {});
   await loadMeetings();
   if (keptId) { await openMeeting(keptId, "transcript"); return; }

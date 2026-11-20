@@ -2,12 +2,12 @@
 use crate::state::{ActiveRecording, AppState};
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
-use margin_core::diarize::{SpeakerClusterer, SpeakerEmbedder};
-use margin_core::llm;
-use margin_core::session::{Session, SessionConfig, SessionSink};
-use margin_core::store::Meeting;
-use margin_core::stt::Transcriber;
-use margin_core::{catalog, models, CalEvent, Segment};
+use milkrice_core::diarize::{SpeakerClusterer, SpeakerEmbedder};
+use milkrice_core::llm;
+use milkrice_core::session::{Session, SessionConfig, SessionSink};
+use milkrice_core::store::Meeting;
+use milkrice_core::stt::Transcriber;
+use milkrice_core::{catalog, models, CalEvent, Segment};
 use parking_lot::Mutex;
 use serde_json::json;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -67,7 +67,7 @@ pub fn ensure_embedder(app: &AppHandle) -> Option<Arc<Mutex<SpeakerEmbedder>>> {
         });
         return None;
     }
-    let path = margin_core::paths::models_dir().join(margin_core::diarize::EMBED_MODEL_FILE);
+    let path = milkrice_core::paths::models_dir().join(milkrice_core::diarize::EMBED_MODEL_FILE);
     match SpeakerEmbedder::load(&path) {
         Ok(e) => {
             let arc = Arc::new(Mutex::new(e));
@@ -131,7 +131,7 @@ pub fn new_meeting(state: &AppState, title: &str, event: Option<&CalEvent>) -> R
 
 /// Bumped whenever folders or filing change, so cached suggestions are recomputed.
 pub static FOLDERS_VERSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-static SUGGESTIONS: parking_lot::Mutex<Option<std::collections::HashMap<String, (u64, Option<margin_core::store::Folder>)>>> =
+static SUGGESTIONS: parking_lot::Mutex<Option<std::collections::HashMap<String, (u64, Option<milkrice_core::store::Folder>)>>> =
     parking_lot::Mutex::new(None);
 
 pub fn folders_changed() {
@@ -143,12 +143,12 @@ pub fn series_of(m: &Meeting) -> String {
     if m.event_id.is_none() {
         return String::new();
     }
-    let k = margin_core::folders::series_key(&m.title);
+    let k = milkrice_core::folders::series_key(&m.title);
     if matches!(k.as_str(), "" | "untitled" | "untitled meeting" | "new note") { String::new() } else { k }
 }
 
-fn note_info(m: &Meeting) -> margin_core::folders::NoteInfo {
-    margin_core::folders::NoteInfo {
+fn note_info(m: &Meeting) -> milkrice_core::folders::NoteInfo {
+    milkrice_core::folders::NoteInfo {
         title: m.title.clone(),
         attendees: m.attendees.clone(),
         text: if m.enhanced.trim().is_empty() { m.notes.clone() } else { m.enhanced.clone() },
@@ -159,7 +159,7 @@ fn note_info(m: &Meeting) -> margin_core::folders::NoteInfo {
 /// The folder to offer for a note that's in none: computed on this Mac from the notes already
 /// filed; else what the AI picked after the meeting (if an AI is set up). Cached, because the
 /// note view refreshes often while recording.
-pub fn folder_suggestion(state: &AppState, m: &Meeting) -> Option<margin_core::store::Folder> {
+pub fn folder_suggestion(state: &AppState, m: &Meeting) -> Option<milkrice_core::store::Folder> {
     use std::hash::{Hash, Hasher};
     let hint = state.store.folder_hint(&m.id).unwrap_or_default();
     if hint == "dismissed" {
@@ -178,7 +178,7 @@ pub fn folder_suggestion(state: &AppState, m: &Meeting) -> Option<margin_core::s
     let found = if folders.is_empty() {
         None
     } else {
-        let local = margin_core::folders::suggest(&note_info(m), &state.store.filed_notes().unwrap_or_default())
+        let local = milkrice_core::folders::suggest(&note_info(m), &state.store.filed_notes().unwrap_or_default())
             .and_then(|(id, _)| folders.iter().find(|f| f.id == id).cloned());
         local.or_else(|| hint.strip_prefix("ai:").and_then(|id| folders.iter().find(|f| f.id == id).cloned()))
     };
@@ -284,8 +284,8 @@ pub fn start(app: &AppHandle, meeting_id: &str, event_end: Option<DateTime<Utc>>
     let last_speech = Arc::new(Mutex::new(Instant::now()));
     let sink = Arc::new(Sink { app: app.clone(), meeting_id: meeting_id.to_string(), last_speech: last_speech.clone() });
     let cfg = SessionConfig {
-        record_to: (s.keep_audio && margin_core::audio_rec::valid_id(meeting_id))
-            .then(|| margin_core::paths::audio_dir().join(meeting_id).join(offset_ms.to_string())),
+        record_to: (s.keep_audio && milkrice_core::audio_rec::valid_id(meeting_id))
+            .then(|| milkrice_core::paths::audio_dir().join(meeting_id).join(offset_ms.to_string())),
         capture_system: s.capture_system,
         mic_device: s.mic_device.clone(),
         offset_ms,
@@ -293,9 +293,9 @@ pub fn start(app: &AppHandle, meeting_id: &str, event_end: Option<DateTime<Utc>>
         speaker_base,
         ..Default::default()
     };
-    // MARGIN_TEST_AUDIO=<dir>: play <dir>/mic.wav + system.wav in real time instead of the
+    // MILKRICE_TEST_AUDIO=<dir>: play <dir>/mic.wav + system.wav in real time instead of the
     // live devices (QA of the scheduler/recorder path without OS audio permissions).
-    let session = match std::env::var("MARGIN_TEST_AUDIO") {
+    let session = match std::env::var("MILKRICE_TEST_AUDIO") {
         Ok(dir) => {
             let (rx, handle) = test_audio_source(dir.into())?;
             Session::from_frames_with(cfg, rx, vec![handle], engine, embedder, sink)?
@@ -382,7 +382,7 @@ pub fn auto_started(app: &AppHandle, ev: &CalEvent) {
     let id = state.recording.lock().as_ref().map(|r| r.meeting_id.clone());
     *state.auto_recording.lock() = id.clone();
     let title = if ev.title.trim().is_empty() { "Untitled meeting" } else { ev.title.trim() };
-    notify(app, &format!("Recording automatically: {title}"), "Auto-record is on. Stop or turn it off from the menu bar or the Margin window.");
+    notify(app, &format!("Recording automatically: {title}"), "Auto-record is on. Stop or turn it off from the menu bar or the Milkrice window.");
     let _ = app.emit("auto-recording", json!({"meeting_id": id, "title": title}));
     emit_rec_state(app);
 }
@@ -435,7 +435,7 @@ pub fn name_by_structure(state: &AppState, id: &str) -> bool {
     let Ok(Some(m)) = state.store.get_meeting(id) else { return false };
     let Ok(segs) = state.store.segments(id) else { return false };
     let mut time: std::collections::BTreeMap<&str, u64> = Default::default();
-    for s in segs.iter().filter(|s| s.source == margin_core::AudioSource::System) {
+    for s in segs.iter().filter(|s| s.source == milkrice_core::AudioSource::System) {
         *time.entry(s.speaker.as_str()).or_default() += s.end_ms.saturating_sub(s.start_ms);
     }
     let total: u64 = time.values().sum();
@@ -446,7 +446,7 @@ pub fn name_by_structure(state: &AppState, id: &str) -> bool {
     if (*t as f64) < 0.9 * total as f64 || m.speakers.contains_key(*label) {
         return false;
     }
-    let cands = margin_core::names::candidates(&m.title, &m.attendees, &state.settings().user_name);
+    let cands = milkrice_core::names::candidates(&m.title, &m.attendees, &state.settings().user_name);
     let [name] = cands.as_slice() else { return false };
     let mut speakers = m.speakers.clone();
     let mut guessed = m.speakers_guessed.clone();
@@ -517,7 +517,7 @@ pub fn after_meeting(app: &AppHandle, id: &str) -> Result<()> {
     // 4. Folder suggestion, only if nothing local fits.
     ai_folder_pick(&state, id, p, &model);
     let _ = app.emit("meeting-updated", json!({"id": id}));
-    notify(app, "Your notes are ready", if m.title.is_empty() { "Margin" } else { &m.title });
+    notify(app, "Your notes are ready", if m.title.is_empty() { "Milkrice" } else { &m.title });
     Ok(())
 }
 
@@ -548,14 +548,14 @@ pub fn enhance(app: &AppHandle, m: &Meeting, segments: &[Segment], p: llm::Provi
     Ok(out)
 }
 
-/// `MARGIN_SELFTEST=<dir>`: play <dir>/mic.wav + <dir>/system.wav through the real recorder,
+/// `MILKRICE_SELFTEST=<dir>`: play <dir>/mic.wav + <dir>/system.wav through the real recorder,
 /// store and after-meeting AI pass, print the result, then quit. Used for headless QA.
 pub fn selftest(app: AppHandle, dir: std::path::PathBuf) {
     std::thread::spawn(move || {
         let run = || -> Result<()> {
             let state = app.state::<AppState>();
             let mut s = state.settings();
-            s.model_id = Some(std::env::var("MARGIN_SELFTEST_MODEL").unwrap_or_else(|_| "parakeet-v2".into()));
+            s.model_id = Some(std::env::var("MILKRICE_SELFTEST_MODEL").unwrap_or_else(|_| "parakeet-v2".into()));
             s.user_name = "Alex".into();
             selftest_provider(&mut s);
             state.save_settings(s)?;
@@ -567,8 +567,8 @@ pub fn selftest(app: AppHandle, dir: std::path::PathBuf) {
                 start: Utc::now(),
                 end: Utc::now(),
                 attendees: vec![
-                    margin_core::Attendee { name: "Daniel Brooks".into(), email: None, is_self: false },
-                    margin_core::Attendee { name: "Rishi Patel".into(), email: None, is_self: false },
+                    milkrice_core::Attendee { name: "Daniel Brooks".into(), email: None, is_self: false },
+                    milkrice_core::Attendee { name: "Rishi Patel".into(), email: None, is_self: false },
                 ],
                 location: None,
                 meeting_url: None,
@@ -579,7 +579,7 @@ pub fn selftest(app: AppHandle, dir: std::path::PathBuf) {
             let m = new_meeting(&state, "", Some(&ev))?;
             state.store.set_field(&m.id, "notes", "beta date\nrelease notes owner?")?;
             let read = |n: &str| -> Result<Vec<f32>> {
-                let mut r = margin_core::transcribe_rs::audio::read_wav_samples(&dir.join(n)).map_err(|e| anyhow!("{e}"))?;
+                let mut r = milkrice_core::transcribe_rs::audio::read_wav_samples(&dir.join(n)).map_err(|e| anyhow!("{e}"))?;
                 r.shrink_to_fit();
                 Ok(r)
             };
@@ -590,9 +590,9 @@ pub fn selftest(app: AppHandle, dir: std::path::PathBuf) {
             let session = Session::from_frames(SessionConfig::default(), rx, engine, embedder, sink)?;
             state.store.mark_started(&m.id)?;
             for i in (0..mic.len().max(sys.len())).step_by(1600) {
-                for (src, b) in [(margin_core::AudioSource::Mic, &mic), (margin_core::AudioSource::System, &sys)] {
+                for (src, b) in [(milkrice_core::AudioSource::Mic, &mic), (milkrice_core::AudioSource::System, &sys)] {
                     if i < b.len() {
-                        tx.send(margin_core::AudioFrame { source: src, samples: b[i..(i + 1600).min(b.len())].to_vec() })?;
+                        tx.send(milkrice_core::AudioFrame { source: src, samples: b[i..(i + 1600).min(b.len())].to_vec() })?;
                     }
                 }
             }
@@ -619,26 +619,26 @@ pub fn selftest(app: AppHandle, dir: std::path::PathBuf) {
     });
 }
 
-fn crossbeam_channel_bounded() -> (margin_core::Sender<margin_core::AudioFrame>, margin_core::Receiver<margin_core::AudioFrame>) {
-    margin_core::bounded(64)
+fn crossbeam_channel_bounded() -> (milkrice_core::Sender<milkrice_core::AudioFrame>, milkrice_core::Receiver<milkrice_core::AudioFrame>) {
+    milkrice_core::bounded(64)
 }
 
-/// Real-time player for MARGIN_TEST_AUDIO; after the files end it sends silence until stopped.
+/// Real-time player for MILKRICE_TEST_AUDIO; after the files end it sends silence until stopped.
 fn test_audio_source(
     dir: std::path::PathBuf,
-) -> Result<(margin_core::Receiver<margin_core::AudioFrame>, margin_core::audio::CaptureHandle)> {
-    let read = |n: &str| margin_core::transcribe_rs::audio::read_wav_samples(&dir.join(n)).map_err(|e| anyhow!("{e}"));
+) -> Result<(milkrice_core::Receiver<milkrice_core::AudioFrame>, milkrice_core::audio::CaptureHandle)> {
+    let read = |n: &str| milkrice_core::transcribe_rs::audio::read_wav_samples(&dir.join(n)).map_err(|e| anyhow!("{e}"));
     let (mic, sys) = (read("mic.wav")?, read("system.wav")?);
-    let (tx, rx) = margin_core::bounded(64);
+    let (tx, rx) = milkrice_core::bounded(64);
     let stop = Arc::new(AtomicBool::new(false));
     let stop2 = stop.clone();
     std::thread::spawn(move || {
         let t0 = Instant::now();
         let mut i = 0usize;
         while !stop2.load(Ordering::Relaxed) {
-            for (src, b) in [(margin_core::AudioSource::Mic, &mic), (margin_core::AudioSource::System, &sys)] {
+            for (src, b) in [(milkrice_core::AudioSource::Mic, &mic), (milkrice_core::AudioSource::System, &sys)] {
                 let chunk = if i < b.len() { b[i..(i + 1600).min(b.len())].to_vec() } else { vec![0.0; 1600] };
-                if tx.send(margin_core::AudioFrame { source: src, samples: chunk }).is_err() {
+                if tx.send(milkrice_core::AudioFrame { source: src, samples: chunk }).is_err() {
                     return;
                 }
             }
@@ -649,12 +649,12 @@ fn test_audio_source(
             }
         }
     });
-    Ok((rx, margin_core::audio::CaptureHandle::new(move || stop.store(true, Ordering::Relaxed))))
+    Ok((rx, milkrice_core::audio::CaptureHandle::new(move || stop.store(true, Ordering::Relaxed))))
 }
 
-/// `MARGIN_TEST_EVENT=<seconds>`: inject a calendar meeting that started just now and ends in
+/// `MILKRICE_TEST_EVENT=<seconds>`: inject a calendar meeting that started just now and ends in
 /// <seconds>, switch to auto-record, and let the real scheduler start, stop and summarise it.
-/// Prints the result and quits. Combine with MARGIN_TEST_AUDIO and MARGIN_QUIET_SECS.
+/// Prints the result and quits. Combine with MILKRICE_TEST_AUDIO and MILKRICE_QUIET_SECS.
 pub fn calendar_selftest(app: AppHandle, secs: i64) {
     let state = app.state::<AppState>();
     let mut s = state.settings();
@@ -662,11 +662,11 @@ pub fn calendar_selftest(app: AppHandle, secs: i64) {
     s.auto_stop = true;
     s.auto_enhance = true;
     s.user_name = "Alex".into();
-    if std::env::var("MARGIN_TEST_KEEP_AUDIO").is_ok() {
+    if std::env::var("MILKRICE_TEST_KEEP_AUDIO").is_ok() {
         s.keep_audio = true;
     }
-    if let Ok(dir) = std::env::var("MARGIN_TEST_OBSIDIAN") {
-        s.obsidian = Some(margin_core::obsidian::ExportOptions { root: dir, ..Default::default() });
+    if let Ok(dir) = std::env::var("MILKRICE_TEST_OBSIDIAN") {
+        s.obsidian = Some(milkrice_core::obsidian::ExportOptions { root: dir, ..Default::default() });
     }
     if s.model_id.is_none() {
         s.model_id = Some("parakeet-v2".into());
@@ -680,9 +680,9 @@ pub fn calendar_selftest(app: AppHandle, secs: i64) {
         start: now - chrono::Duration::seconds(5),
         end: now + chrono::Duration::seconds(secs),
         attendees: vec![
-            margin_core::Attendee { name: "Daniel Brooks".into(), email: Some("daniel@example.com".into()), is_self: false },
-            margin_core::Attendee { name: "Rishi Patel".into(), email: Some("rishi@example.com".into()), is_self: false },
-            margin_core::Attendee { name: "Alex".into(), email: None, is_self: true },
+            milkrice_core::Attendee { name: "Daniel Brooks".into(), email: Some("daniel@example.com".into()), is_self: false },
+            milkrice_core::Attendee { name: "Rishi Patel".into(), email: Some("rishi@example.com".into()), is_self: false },
+            milkrice_core::Attendee { name: "Alex".into(), email: None, is_self: true },
         ],
         location: None,
         meeting_url: Some("https://meet.google.com/qa-test".into()),
@@ -715,7 +715,7 @@ pub fn calendar_selftest(app: AppHandle, secs: i64) {
                             println!("CALTEST seg [{}] {}: {}", seg.start_ms, seg.speaker, seg.text);
                         }
                         println!("CALTEST notes:\n{}", m.enhanced);
-                        for (off, p) in margin_core::audio_rec::recordings(&id) {
+                        for (off, p) in milkrice_core::audio_rec::recordings(&id) {
                             let len = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
                             println!("CALTEST audio: offset {off} ms -> {} ({} KB)", p.display(), len / 1024);
                         }

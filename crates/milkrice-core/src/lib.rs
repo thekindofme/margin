@@ -1,4 +1,4 @@
-//! Margin core: local-first meeting capture, transcription, speakers, calendar and AI notes.
+//! Milkrice core: local-first meeting capture, transcription, speakers, calendar and AI notes.
 pub mod agent;
 pub mod audio;
 pub mod audio_rec;

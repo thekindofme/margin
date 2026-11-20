@@ -36,7 +36,7 @@ pub fn shell_path() -> &'static str {
     P.get_or_init(|| {
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
         let out = Command::new(&shell)
-            .args(["-ilc", "printf '__MARGIN_PATH__%s__END__' \"$PATH\""])
+            .args(["-ilc", "printf '__MILKRICE_PATH__%s__END__' \"$PATH\""])
             .stdin(Stdio::null())
             .stderr(Stdio::null())
             .output();
@@ -44,7 +44,7 @@ pub fn shell_path() -> &'static str {
             .ok()
             .and_then(|o| {
                 let s = String::from_utf8_lossy(&o.stdout).to_string();
-                let a = s.find("__MARGIN_PATH__")? + "__MARGIN_PATH__".len();
+                let a = s.find("__MILKRICE_PATH__")? + "__MILKRICE_PATH__".len();
                 let b = s[a..].find("__END__")? + a;
                 Some(s[a..b].to_string())
             })
@@ -77,7 +77,7 @@ fn find_bin(name: &str) -> Option<PathBuf> {
 }
 
 fn scratch_dir() -> PathBuf {
-    let d = std::env::temp_dir().join("margin-llm");
+    let d = std::env::temp_dir().join("milkrice-llm");
     let _ = std::fs::create_dir_all(&d);
     d
 }
@@ -358,7 +358,7 @@ fn meeting_header(m: &Meeting) -> String {
     h
 }
 
-const NOTES_SYSTEM: &str = "You are Margin, a meticulous meeting-notes writer. You turn a raw transcript plus the user's own rough notes into crisp, skimmable notes in Markdown. Rules: The user's notes signal what they care about — expand every one of them with detail from the transcript, keep their wording where possible. Be specific: names, numbers, dates, decisions. Never invent facts that are not in the transcript or notes. Use '### ' headings, short bullets, and **bold** sparingly for key decisions. End with '### Action items' as '- [ ] Owner — task (due date if mentioned)' when there are any. No preamble, no closing remarks, no title line.";
+const NOTES_SYSTEM: &str = "You are Milkrice, a meticulous meeting-notes writer. You turn a raw transcript plus the user's own rough notes into crisp, skimmable notes in Markdown. Rules: The user's notes signal what they care about — expand every one of them with detail from the transcript, keep their wording where possible. Be specific: names, numbers, dates, decisions. Never invent facts that are not in the transcript or notes. Use '### ' headings, short bullets, and **bold** sparingly for key decisions. End with '### Action items' as '- [ ] Owner — task (due date if mentioned)' when there are any. No preamble, no closing remarks, no title line.";
 
 pub fn enhance_prompt(m: &Meeting, segments: &[Segment]) -> (String, String) {
     let tpl = TEMPLATES.iter().find(|t| t.0 == m.template).unwrap_or(&TEMPLATES[0]);

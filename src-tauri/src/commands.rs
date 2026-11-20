@@ -2,8 +2,8 @@
 use crate::state::{AppState, Settings};
 use crate::{recorder, scheduler};
 
-use margin_core::store::{ChatMessage, Folder, Meeting, MeetingSummary};
-use margin_core::{audio, catalog, llm, models, CalEvent, Segment};
+use milkrice_core::store::{ChatMessage, Folder, Meeting, MeetingSummary};
+use milkrice_core::{audio, catalog, llm, models, CalEvent, Segment};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -54,10 +54,10 @@ pub fn save_settings(app: AppHandle, state: State<AppState>, mut settings: Setti
     Ok(redacted(settings))
 }
 
-/// Status of every permission Margin uses, for the guided permissions panel.
+/// Status of every permission Milkrice uses, for the guided permissions panel.
 #[tauri::command]
 pub fn permissions(app: AppHandle) -> Value {
-    use margin_core::permissions::{status, Permission};
+    use milkrice_core::permissions::{status, Permission};
     use tauri_plugin_notification::{NotificationExt, PermissionState};
     let notif = match app.notification().permission_state() {
         Ok(PermissionState::Granted) => "granted",
@@ -78,11 +78,11 @@ fn bundle_path() -> Option<std::path::PathBuf> {
 }
 
 /// Ask for a permission the easiest way macOS allows: the native prompt if it can still be
-/// shown, otherwise open the exact System Settings pane and reveal Margin.app in Finder so it
+/// shown, otherwise open the exact System Settings pane and reveal Milkrice.app in Finder so it
 /// can be dragged into the list.
 #[tauri::command]
 pub async fn grant_permission(app: AppHandle, kind: String) -> R<Value> {
-    use margin_core::permissions::{open_settings, request, status, PermStatus, Permission};
+    use milkrice_core::permissions::{open_settings, request, status, PermStatus, Permission};
     if kind == "notifications" {
         use tauri_plugin_notification::NotificationExt;
         let st = app.notification().request_permission().map_err(e)?;
@@ -122,7 +122,7 @@ pub async fn grant_permission(app: AppHandle, kind: String) -> R<Value> {
 
 #[tauri::command]
 pub fn open_permission_settings(kind: String) -> R<()> {
-    use margin_core::permissions::{open_settings, Permission};
+    use milkrice_core::permissions::{open_settings, Permission};
     let p = match kind.as_str() {
         "microphone" => Permission::Microphone,
         "system_audio" => Permission::SystemAudio,
@@ -196,7 +196,7 @@ pub fn mic_test(app: AppHandle, device: Option<String>, on: bool) -> R<()> {
     if !on {
         return Ok(());
     }
-    let (tx, rx) = margin_core::bounded::<margin_core::AudioFrame>(32);
+    let (tx, rx) = milkrice_core::bounded::<milkrice_core::AudioFrame>(32);
     let handle = audio::start_mic(device.filter(|d| !d.is_empty()), tx).map_err(e)?;
     *state.mic_test.lock() = Some(handle);
     std::thread::spawn(move || {
@@ -553,14 +553,14 @@ pub fn delete_meeting(app: AppHandle, state: State<AppState>, id: String) -> R<(
     if state.recording.lock().as_ref().map(|r| r.meeting_id == id).unwrap_or(false) {
         recorder::stop_and_wait(&app, std::time::Duration::from_secs(20));
     }
-    let _ = margin_core::audio_rec::delete_recordings(&id);
+    let _ = milkrice_core::audio_rec::delete_recordings(&id);
     state.store.delete_meeting(&id).map_err(e)
 }
 
 /// Kept recordings for a meeting (opt-in setting), each with the transcript offset it starts at.
 #[tauri::command]
 pub fn meeting_audio(id: String) -> Value {
-    json!(margin_core::audio_rec::recordings(&id)
+    json!(milkrice_core::audio_rec::recordings(&id)
         .into_iter()
         .map(|(offset_ms, p)| json!({"offset_ms": offset_ms, "path": p.to_string_lossy()}))
         .collect::<Vec<_>>())
@@ -568,12 +568,12 @@ pub fn meeting_audio(id: String) -> Value {
 
 #[tauri::command]
 pub fn delete_meeting_audio(id: String) -> R<()> {
-    margin_core::audio_rec::delete_recordings(&id).map_err(e)
+    milkrice_core::audio_rec::delete_recordings(&id).map_err(e)
 }
 
 #[tauri::command]
 pub fn audio_storage() -> Value {
-    json!({"bytes": margin_core::audio_rec::usage_bytes()})
+    json!({"bytes": milkrice_core::audio_rec::usage_bytes()})
 }
 
 /// Rename a speaker; naming two speakers the same merges them.
@@ -677,7 +677,7 @@ pub async fn identify_speakers(app: AppHandle, id: String) -> R<()> {
         // The calendar can settle a 1:1 without any AI.
         if recorder::name_by_structure(&state, &id) {
             m = state.store.get_meeting(&id)?.ok_or_else(|| anyhow::anyhow!("not found"))?;
-            let unnamed = segs.iter().any(|s| s.source == margin_core::AudioSource::System && !m.speakers.contains_key(&s.speaker));
+            let unnamed = segs.iter().any(|s| s.source == milkrice_core::AudioSource::System && !m.speakers.contains_key(&s.speaker));
             if !unnamed {
                 let _ = app.emit("meeting-updated", json!({"id": id}));
                 crate::export::schedule(&app, &id);
@@ -775,7 +775,7 @@ pub async fn ask_all(app: AppHandle, question: String) -> R<String> {
 
 fn cli_path() -> Option<std::path::PathBuf> {
     let exe = std::env::current_exe().ok()?;
-    let p = exe.parent()?.join("margin-cli");
+    let p = exe.parent()?.join("milkrice-cli");
     p.is_file().then_some(p)
 }
 
@@ -797,7 +797,7 @@ fn agent_cli_ok(bin: &str, args: &[&str]) -> bool {
 #[tauri::command]
 pub async fn agents_status() -> R<Value> {
     blocking(|| {
-        let link = home().join(".local/bin/margin");
+        let link = home().join(".local/bin/milkrice");
         let cli = cli_path();
         let installed = std::fs::read_link(&link).ok().zip(cli.clone()).map(|(a, b)| a == b).unwrap_or(false);
         let which = |n: &str| which::which_in(n, Some(llm::shell_path()), "/").is_ok();
@@ -806,9 +806,9 @@ pub async fn agents_status() -> R<Value> {
             "cli_installed": installed,
             "cli_path": link.to_string_lossy(),
             "claude_available": which("claude"),
-            "claude_connected": agent_cli_ok("claude", &["mcp", "get", "margin"]) && home().join(".claude/skills/margin/SKILL.md").exists(),
+            "claude_connected": agent_cli_ok("claude", &["mcp", "get", "milkrice"]) && home().join(".claude/skills/milkrice/SKILL.md").exists(),
             "codex_available": which("codex"),
-            "codex_connected": agent_cli_ok("codex", &["mcp", "get", "margin"]) && home().join(".codex/skills/margin/SKILL.md").exists(),
+            "codex_connected": agent_cli_ok("codex", &["mcp", "get", "milkrice"]) && home().join(".codex/skills/milkrice/SKILL.md").exists(),
         }))
     })
     .await
@@ -821,9 +821,9 @@ pub async fn agent_connect(app: AppHandle, target: String) -> R<String> {
         .path()
         .resource_dir()
         .map_err(e)?
-        .join("skill/margin/SKILL.md");
+        .join("skill/milkrice/SKILL.md");
     blocking(move || {
-        let cli = cli_path().ok_or_else(|| anyhow::anyhow!("margin-cli isn't bundled in this build"))?;
+        let cli = cli_path().ok_or_else(|| anyhow::anyhow!("milkrice-cli isn't bundled in this build"))?;
         let install_skill = |dir: std::path::PathBuf| -> anyhow::Result<()> {
             std::fs::create_dir_all(&dir)?;
             std::fs::copy(&skill_src, dir.join("SKILL.md"))?;
@@ -843,21 +843,26 @@ pub async fn agent_connect(app: AppHandle, target: String) -> R<String> {
             "cli" => {
                 let dir = home().join(".local/bin");
                 std::fs::create_dir_all(&dir)?;
-                let link = dir.join("margin");
+                remove_legacy_cli_link(&dir);
+                let link = dir.join("milkrice");
                 let _ = std::fs::remove_file(&link);
                 std::os::unix::fs::symlink(&cli, &link)?;
                 Ok(format!("Installed {}", link.display()))
             }
             "claude" => {
-                let _ = run("claude", vec!["mcp".into(), "remove".into(), "-s".into(), "user".into(), "margin".into()]);
-                run("claude", vec!["mcp".into(), "add".into(), "-s".into(), "user".into(), "margin".into(), "--".into(), cli_s, "mcp".into()])?;
-                install_skill(home().join(".claude/skills/margin"))?;
+                remove_legacy_mcp("claude", &["mcp", "remove", "-s", "user", "margin"]);
+                remove_legacy_skill(&home().join(".claude/skills/margin"));
+                let _ = run("claude", vec!["mcp".into(), "remove".into(), "-s".into(), "user".into(), "milkrice".into()]);
+                run("claude", vec!["mcp".into(), "add".into(), "-s".into(), "user".into(), "milkrice".into(), "--".into(), cli_s, "mcp".into()])?;
+                install_skill(home().join(".claude/skills/milkrice"))?;
                 Ok("Claude Code can now read your meetings (MCP + skill)".into())
             }
             "codex" => {
-                let _ = run("codex", vec!["mcp".into(), "remove".into(), "margin".into()]);
-                run("codex", vec!["mcp".into(), "add".into(), "margin".into(), "--".into(), cli_s, "mcp".into()])?;
-                install_skill(home().join(".codex/skills/margin"))?;
+                remove_legacy_mcp("codex", &["mcp", "remove", "margin"]);
+                remove_legacy_skill(&home().join(".codex/skills/margin"));
+                let _ = run("codex", vec!["mcp".into(), "remove".into(), "milkrice".into()]);
+                run("codex", vec!["mcp".into(), "add".into(), "milkrice".into(), "--".into(), cli_s, "mcp".into()])?;
+                install_skill(home().join(".codex/skills/milkrice"))?;
                 Ok("Codex can now read your meetings (MCP + skill)".into())
             }
             _ => anyhow::bail!("unknown target"),
@@ -866,11 +871,92 @@ pub async fn agent_connect(app: AppHandle, target: String) -> R<String> {
     .await
 }
 
+/// True if a symlink target is the pre-rename (Margin) CLI: inside a Margin.app bundle, or a
+/// binary called margin-cli. Anything else (a user's own `margin` tool) is left alone.
+fn is_legacy_cli_target(target: &std::path::Path) -> bool {
+    let in_old_app = target.components().any(|c| c.as_os_str() == "Margin.app");
+    in_old_app || target.file_name().map(|n| n == "margin-cli").unwrap_or(false)
+}
+
+/// Remove ~/.local/bin/margin only when it is a symlink to the old Margin CLI.
+fn remove_legacy_cli_link(dir: &std::path::Path) {
+    let old = dir.join("margin");
+    if let Ok(target) = std::fs::read_link(&old) {
+        if is_legacy_cli_target(&target) {
+            let _ = std::fs::remove_file(&old);
+        }
+    }
+}
+
+/// Unregister an MCP server named "margin" only if its command is the old margin-cli.
+fn remove_legacy_mcp(bin: &str, remove_args: &[&str]) {
+    let out = std::process::Command::new(bin).args(["mcp", "get", "margin"]).env("PATH", llm::shell_path()).output();
+    if let Ok(o) = out {
+        let text = String::from_utf8_lossy(&o.stdout).to_string() + &String::from_utf8_lossy(&o.stderr);
+        if o.status.success() && text.contains("margin-cli") {
+            let _ = std::process::Command::new(bin).args(remove_args).env("PATH", llm::shell_path()).output();
+        }
+    }
+}
+
+/// Remove the old skill folder (~/.claude/skills/margin etc.) if it is the one we installed.
+fn remove_legacy_skill(dir: &std::path::Path) {
+    let skill = dir.join("SKILL.md");
+    if std::fs::read_to_string(&skill).map(|t| t.lines().take(3).any(|l| l.trim() == "name: margin")).unwrap_or(false) {
+        let _ = std::fs::remove_file(&skill);
+        let _ = std::fs::remove_dir(dir); // only succeeds if now empty
+    }
+}
+
+#[cfg(test)]
+mod legacy_tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn recognises_old_cli_targets() {
+        assert!(is_legacy_cli_target(Path::new("/Applications/Margin.app/Contents/MacOS/margin-cli")));
+        assert!(is_legacy_cli_target(Path::new("/x/target/release/margin-cli")));
+        assert!(!is_legacy_cli_target(Path::new("/Applications/Milkrice.app/Contents/MacOS/milkrice-cli")));
+        assert!(!is_legacy_cli_target(Path::new("/usr/local/bin/margin")));
+    }
+
+    #[test]
+    fn removes_only_stale_symlink() {
+        let d = std::env::temp_dir().join(format!("milkrice-legacy-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&d).unwrap();
+        let link = d.join("margin");
+        std::os::unix::fs::symlink("/Applications/Margin.app/Contents/MacOS/margin-cli", &link).unwrap();
+        remove_legacy_cli_link(&d);
+        assert!(std::fs::symlink_metadata(&link).is_err());
+        std::os::unix::fs::symlink("/opt/tools/margin", &link).unwrap();
+        remove_legacy_cli_link(&d);
+        assert!(std::fs::symlink_metadata(&link).is_ok());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn removes_only_our_old_skill() {
+        let d = std::env::temp_dir().join(format!("milkrice-skill-{}", uuid::Uuid::new_v4()));
+        let ours = d.join("margin");
+        std::fs::create_dir_all(&ours).unwrap();
+        std::fs::write(ours.join("SKILL.md"), "---\nname: margin\n---\n").unwrap();
+        remove_legacy_skill(&ours);
+        assert!(!ours.exists());
+        let theirs = d.join("other");
+        std::fs::create_dir_all(&theirs).unwrap();
+        std::fs::write(theirs.join("SKILL.md"), "---\nname: something-else\n---\n").unwrap();
+        remove_legacy_skill(&theirs);
+        assert!(theirs.join("SKILL.md").exists());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+}
+
 // ------------------------------------------------------------------ Obsidian / second brain
 
 #[tauri::command]
 pub fn obsidian_vaults() -> Value {
-    json!(margin_core::obsidian::detect_vaults())
+    json!(milkrice_core::obsidian::detect_vaults())
 }
 
 /// Write every past meeting into the chosen vault/folder. Returns how many notes were written.
@@ -948,7 +1034,7 @@ pub fn export_markdown(state: State<AppState>, id: String, save: bool) -> R<Stri
     if !save {
         return Ok(md);
     }
-    let dir = dirs::document_dir().unwrap_or_else(margin_core::paths::data_dir).join("Margin");
+    let dir = dirs::document_dir().unwrap_or_else(milkrice_core::paths::data_dir).join("Milkrice");
     std::fs::create_dir_all(&dir).map_err(e)?;
     let safe: String = m
         .title

@@ -192,7 +192,7 @@ mod tests {
 
     #[test]
     fn records_mixes_and_encodes() {
-        let dir = std::env::temp_dir().join(format!("margin-rec-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("milkrice-rec-{}", uuid::Uuid::new_v4()));
         let base = dir.join("0");
         let mut r = AudioRecorder::create(&base).unwrap();
         let tone: Vec<f32> = (0..16_000).map(|i| (i as f32 * 0.05).sin() * 0.3).collect();

@@ -3,8 +3,8 @@
 use crate::recorder;
 use crate::state::{AppState, Prompt};
 use chrono::{Duration as CDur, Utc};
-use margin_core::calendar::{self, CalendarAuth};
-use margin_core::{detect, CalEvent};
+use milkrice_core::calendar::{self, CalendarAuth};
+use milkrice_core::{detect, CalEvent};
 use serde_json::json;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
@@ -15,7 +15,7 @@ const LEAD: i64 = 60;
 /// After an event ends, stop once nobody has spoken for this long.
 fn quiet_after_end() -> Duration {
     // Overridable for automated tests.
-    let secs = std::env::var("MARGIN_QUIET_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(90);
+    let secs = std::env::var("MILKRICE_QUIET_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(90);
     Duration::from_secs(secs)
 }
 /// Stop regardless after this much silence (forgotten recordings).
@@ -64,7 +64,7 @@ fn follow_moved_event(state: &AppState) {
 const QUIET_FALLBACK: Duration = Duration::from_secs(5 * 60);
 
 /// Whether the call looks over from the call app's side: no known meeting app is capturing
-/// the mic (Margin's own capture doesn't count).
+/// the mic (Milkrice's own capture doesn't count).
 fn call_app_released(quiet: Duration) -> bool {
     match detect::meeting_app_capturing_input() {
         Some(None) => true,
@@ -83,10 +83,10 @@ pub fn is_real_meeting(e: &CalEvent) -> bool {
 
 pub fn refresh_events(app: &AppHandle) {
     let state = app.state::<AppState>();
-    if std::env::var("MARGIN_TEST_EVENT").is_ok() {
+    if std::env::var("MILKRICE_TEST_EVENT").is_ok() {
         return; // test mode: events are injected
     }
-    // Log permission changes once, so calendar problems are diagnosable from margin.log.
+    // Log permission changes once, so calendar problems are diagnosable from milkrice.log.
     static LAST_AUTH: parking_lot::Mutex<Option<CalendarAuth>> = parking_lot::Mutex::new(None);
     let auth = calendar::auth_status();
     {
@@ -117,8 +117,8 @@ pub fn refresh_events(app: &AppHandle) {
     }
     {
         {
-            // Diagnostics: MARGIN_DUMP_EVENTS=<file> writes what the scheduler sees.
-            if let Ok(path) = std::env::var("MARGIN_DUMP_EVENTS") {
+            // Diagnostics: MILKRICE_DUMP_EVENTS=<file> writes what the scheduler sees.
+            if let Ok(path) = std::env::var("MILKRICE_DUMP_EVENTS") {
                 let rows: Vec<serde_json::Value> = evs
                     .iter()
                     .map(|e| json!({"title": e.title, "start": e.start, "end": e.end, "attendees": e.attendees.len(),
@@ -134,7 +134,7 @@ pub fn refresh_events(app: &AppHandle) {
 
 pub fn spawn(app: AppHandle) {
     std::thread::Builder::new()
-        .name("margin-scheduler".into())
+        .name("milkrice-scheduler".into())
         .spawn(move || {
             let mut last_refresh = Instant::now() - Duration::from_secs(3600);
             let mut call_seen_at: Option<Instant> = None;
@@ -146,7 +146,7 @@ pub fn spawn(app: AppHandle) {
                 }
                 if last_retention.elapsed() > Duration::from_secs(3600) {
                     let days = app.state::<AppState>().settings().audio_retention_days;
-                    margin_core::audio_rec::enforce_retention(days);
+                    milkrice_core::audio_rec::enforce_retention(days);
                     last_retention = Instant::now();
                 }
                 tick(&app, &mut call_seen_at);
@@ -230,7 +230,7 @@ fn tick(app: &AppHandle, call_seen_at: &mut Option<Instant>) {
                 recorder::notify(
                     app,
                     &format!("{} is starting", ev.title),
-                    &if who.is_empty() { "Open Margin to take notes".to_string() } else { format!("With {who}. Open Margin to take notes.") },
+                    &if who.is_empty() { "Open Milkrice to take notes".to_string() } else { format!("With {who}. Open Milkrice to take notes.") },
                 );
                 crate::tray::refresh(app);
             }
@@ -248,7 +248,7 @@ fn tick(app: &AppHandle, call_seen_at: &mut Option<Instant>) {
                 let p = Prompt { kind: "call".into(), title: format!("{name} call"), event: None, app: Some(name.clone()), at: now };
                 *state.prompt.lock() = Some(p.clone());
                 let _ = app.emit("prompt", &p);
-                recorder::notify(app, &format!("{name} call detected"), "Open Margin to take notes on this call.");
+                recorder::notify(app, &format!("{name} call detected"), "Open Milkrice to take notes on this call.");
                 crate::tray::refresh(app);
             }
         }

@@ -1,8 +1,8 @@
 //! Record N seconds from mic + system audio into two 16 kHz WAVs.
 //! Usage: capture_test <seconds> <out_dir>
 use crossbeam_channel::{unbounded, RecvTimeoutError};
-use margin_core::audio;
-use margin_core::types::{AudioSource, SAMPLE_RATE};
+use milkrice_core::audio;
+use milkrice_core::types::{AudioSource, SAMPLE_RATE};
 use std::time::{Duration, Instant};
 
 fn writer(path: &std::path::Path) -> anyhow::Result<hound::WavWriter<std::io::BufWriter<std::fs::File>>> {

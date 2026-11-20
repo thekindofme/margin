@@ -90,7 +90,7 @@
     autostart_set: ({ on }) => (db.autostart = on),
     dismiss_prompt: () => null,
     ask_all: async () => { await new Promise(r=>setTimeout(r,600)); return "- The beta ships **Friday** (Beta launch sync, Sat 31 Oct)\n- Sam owns the release notes"; },
-    agents_status: () => ({ cli_bundled: true, cli_installed: false, cli_path: "~/.local/bin/margin", claude_available: true, claude_connected: true, codex_available: true, codex_connected: false }),
+    agents_status: () => ({ cli_bundled: true, cli_installed: false, cli_path: "~/.local/bin/milkrice", claude_available: true, claude_connected: true, codex_available: true, codex_connected: false }),
     agent_connect: () => "Connected",
     audio_devices: () => ({ inputs: ["MacBook Air Microphone", "AirPods Pro", "Shure MV7"], default_input: "MacBook Air Microphone", default_output: "AirPods Pro", selected: null, active: "MacBook Air Microphone", capture_system: true }),
     set_mic: () => null,
@@ -111,7 +111,7 @@
       emit("rec-state", { recording: true, meeting_id: id, paused: false, elapsed_ms: 0, system_audio: true });
       // Fake live transcript lines so the onboarding test and live views have something to show.
       clearTimeout(db.fakeT);
-      const lines = ["Testing, testing, one two three.", "Today I'm working on the onboarding flow.", "Margin should pick this up on its own."];
+      const lines = ["Testing, testing, one two three.", "Today I'm working on the onboarding flow.", "Milkrice should pick this up on its own."];
       lines.forEach((text, i) => setTimeout(() => {
         const seg = { id: 100 + i, start_ms: 1500 + i * 3500, end_ms: 4500 + i * 3500, source: "mic", speaker: "me", text };
         (db.segments[id] ||= []).push(seg);

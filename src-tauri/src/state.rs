@@ -1,10 +1,10 @@
 use chrono::{DateTime, Utc};
-use margin_core::diarize::SpeakerEmbedder;
-use margin_core::llm::{Provider, ProviderInfo};
-use margin_core::session::Session;
-use margin_core::store::Store;
-use margin_core::stt::Transcriber;
-use margin_core::CalEvent;
+use milkrice_core::diarize::SpeakerEmbedder;
+use milkrice_core::llm::{Provider, ProviderInfo};
+use milkrice_core::session::Session;
+use milkrice_core::store::Store;
+use milkrice_core::stt::Transcriber;
+use milkrice_core::CalEvent;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -42,7 +42,7 @@ pub struct Settings {
     /// Delete kept recordings after this many days (0 = keep until deleted).
     pub audio_retention_days: u32,
     /// Mirror every meeting as Markdown into an Obsidian vault / folder (None = off).
-    pub obsidian: Option<margin_core::obsidian::ExportOptions>,
+    pub obsidian: Option<milkrice_core::obsidian::ExportOptions>,
 }
 
 impl Default for Settings {
@@ -104,9 +104,9 @@ pub struct AppState {
     /// Meetings currently being enhanced, so the UI can show progress.
     pub busy: Mutex<HashMap<String, String>>,
     /// Live level preview for the mic picker.
-    pub mic_test: Mutex<Option<margin_core::audio::CaptureHandle>>,
+    pub mic_test: Mutex<Option<milkrice_core::audio::CaptureHandle>>,
     /// Speaker voice prints per meeting, in memory only so resuming keeps labels stable.
-    pub voiceprints: Mutex<HashMap<String, margin_core::diarize::SpeakerClusterer>>,
+    pub voiceprints: Mutex<HashMap<String, milkrice_core::diarize::SpeakerClusterer>>,
     /// Meeting id of a recording that auto-record started (shown loudly in the UI and tray).
     pub auto_recording: Mutex<Option<String>>,
 }

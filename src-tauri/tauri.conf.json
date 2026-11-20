@@ -1,12 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Margin",
+  "productName": "Milkrice",
   "version": "0.1.0",
-  "identifier": "com.yasithfernando.margin",
+  "identifier": "com.yasithfernando.milkrice",
   "build": {
     "frontendDist": "../ui",
     "beforeBuildCommand": {
-      "script": "cargo build --release -p margin-core --bin margin-cli",
+      "script": "cargo build --release -p milkrice-core --bin milkrice-cli",
       "cwd": ".."
     }
   },
@@ -16,7 +16,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Margin",
+        "title": "Milkrice",
         "width": 1180,
         "height": 780,
         "minWidth": 760,
@@ -35,7 +35,7 @@
       "assetProtocol": {
         "enable": true,
         "scope": [
-          "$HOME/Library/Application Support/Margin/audio/**"
+          "$HOME/Library/Application Support/Milkrice/audio/**"
         ]
       }
     }
@@ -59,21 +59,21 @@
       "minimumSystemVersion": "14.2",
       "entitlements": "Entitlements.plist",
       "files": {
-        "MacOS/margin-cli": "../target/release/margin-cli"
+        "MacOS/milkrice-cli": "../target/release/milkrice-cli"
       }
     },
     "resources": {
-      "../skill/margin/SKILL.md": "skill/margin/SKILL.md"
+      "../skill/milkrice/SKILL.md": "skill/milkrice/SKILL.md"
     },
     "copyright": "Copyright © 2026 Yasith Fernando. MIT License.",
-    "homepage": "https://margin.yasithfernando.com",
+    "homepage": "https://milkrice.yasithfernando.com",
     "createUpdaterArtifacts": true
   },
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERCMDY3NkQ1QTJGMDNGNDIKUldSQ1AvQ2kxWFlHMjJCaGF1VEVKQThDTDBuSm1RMCtRYW1SYklwV0NNcy9pc2Zlb2NOVVBpR3gK",
       "endpoints": [
-        "https://github.com/thekindofme/margin/releases/latest/download/latest.json"
+        "https://github.com/thekindofme/milkrice/releases/latest/download/latest.json"
       ]
     }
   }

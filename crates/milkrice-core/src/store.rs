@@ -668,7 +668,7 @@ mod tests {
 
     #[test]
     fn folders() {
-        let dir = std::env::temp_dir().join(format!("margin-test-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("milkrice-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let s = Store::open(&dir.join("t.sqlite")).unwrap();
         let m = Meeting { id: "m1".into(), title: "Acme kickoff".into(), created_at: Utc::now(), template: "auto".into(), status: "draft".into(), ..Default::default() };
@@ -697,7 +697,7 @@ mod tests {
 
     #[test]
     fn purges_only_empty_drafts() {
-        let dir = std::env::temp_dir().join(format!("margin-test-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("milkrice-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let s = Store::open(&dir.join("t.sqlite")).unwrap();
         let mk = |id: &str, title: &str, ev: bool| Meeting {
@@ -716,7 +716,7 @@ mod tests {
 
     #[test]
     fn roundtrip() {
-        let dir = std::env::temp_dir().join(format!("margin-test-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("milkrice-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let s = Store::open(&dir.join("t.sqlite")).unwrap();
         let m = Meeting {

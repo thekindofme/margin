@@ -1,12 +1,12 @@
-//! Headless companion for Margin: manage models, transcribe files, and run the full meeting
+//! Headless companion for Milkrice: manage models, transcribe files, and run the full meeting
 //! pipeline (VAD → STT → speakers → echo removal → AI notes) on recorded audio.
 use anyhow::{anyhow, bail, Context, Result};
-use margin_core::diarize::SpeakerEmbedder;
-use margin_core::llm::{self, Provider};
-use margin_core::session::{Session, SessionConfig, SessionSink};
-use margin_core::store::Meeting;
-use margin_core::stt::Transcriber;
-use margin_core::{catalog, models, AudioFrame, AudioSource, Attendee, Segment};
+use milkrice_core::diarize::SpeakerEmbedder;
+use milkrice_core::llm::{self, Provider};
+use milkrice_core::session::{Session, SessionConfig, SessionSink};
+use milkrice_core::store::Meeting;
+use milkrice_core::stt::Transcriber;
+use milkrice_core::{catalog, models, AudioFrame, AudioSource, Attendee, Segment};
 use parking_lot::Mutex;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
@@ -139,18 +139,18 @@ fn simulate(model: &str, mic: &Path, system: &Path, provider: Option<Provider>) 
     Ok(())
 }
 
-const HELP: &str = "margin — read your local Margin meetings (agent-friendly, read-only)
+const HELP: &str = "milkrice — read your local Milkrice meetings (agent-friendly, read-only)
 
-  margin ls [-q TEXT] [--since 7d] [-f FOLDER] [-n 20]  list meetings: id date len title · people [notes ai tx:N in:Folder]
-  margin folders                                  folders and how many meetings each holds
-  margin show ID [notes,ai,transcript|all]      one meeting; default ai,notes (labelled by source)
-  margin tx ID [--from mm:ss] [--to mm:ss] [--speaker NAME] [--grep TEXT] [-n 300]
-  margin search TEXT [--in notes|ai|transcript] [-n 20]
-  margin mcp                                    MCP server on stdio (tools: list_meetings, get_meeting, get_transcript, search)
+  milkrice ls [-q TEXT] [--since 7d] [-f FOLDER] [-n 20]  list meetings: id date len title · people [notes ai tx:N in:Folder]
+  milkrice folders                                  folders and how many meetings each holds
+  milkrice show ID [notes,ai,transcript|all]      one meeting; default ai,notes (labelled by source)
+  milkrice tx ID [--from mm:ss] [--to mm:ss] [--speaker NAME] [--grep TEXT] [-n 300]
+  milkrice search TEXT [--in notes|ai|transcript] [-n 20]
+  milkrice mcp                                    MCP server on stdio (tools: list_meetings, get_meeting, get_transcript, search)
   add --json to ls/show/tx/search for JSON.  ID = 8-char prefix from ls.
 
 Sources: NOTES = typed by the user · AI SUMMARY = LLM-written (named) · TRANSCRIPT = local speech-to-text ('Me' = user)
-Dev: margin dev models|download|transcribe|simulate|providers|calendar|embed";
+Dev: milkrice dev models|download|transcribe|simulate|providers|calendar|embed";
 
 fn flag<'a>(args: &'a [String], names: &[&str]) -> Option<&'a str> {
     args.iter().position(|a| names.contains(&a.as_str())).and_then(|i| args.get(i + 1)).map(String::as_str)
@@ -178,7 +178,7 @@ fn positional(args: &[String]) -> Vec<&str> {
 }
 
 fn agent_cmd(args: &[String]) -> Result<Option<String>> {
-    use margin_core::agent;
+    use milkrice_core::agent;
     let json = args.iter().any(|a| a == "--json");
     let pos = positional(args);
     let limit = |d: usize| flag(args, &["-n", "--limit"]).and_then(|v| v.parse().ok()).unwrap_or(d);
@@ -186,9 +186,9 @@ fn agent_cmd(args: &[String]) -> Result<Option<String>> {
     if !matches!(cmd, "ls" | "list" | "folders" | "show" | "tx" | "transcript" | "search" | "mcp") {
         return Ok(None);
     }
-    let db = margin_core::paths::db_path();
-    anyhow::ensure!(db.is_file(), "no Margin data yet ({}) — record a meeting first", db.display());
-    let store = margin_core::store::Store::open_readonly(&db)?;
+    let db = milkrice_core::paths::db_path();
+    anyhow::ensure!(db.is_file(), "no Milkrice data yet ({}) — record a meeting first", db.display());
+    let store = milkrice_core::store::Store::open_readonly(&db)?;
     let out = match cmd {
         "ls" | "list" => {
             let since = flag(args, &["--since"]).map(agent::parse_since).transpose()?;
@@ -196,12 +196,12 @@ fn agent_cmd(args: &[String]) -> Result<Option<String>> {
         }
         "folders" => agent::folders(&store, json)?,
         "show" => {
-            let id = pos.get(1).ok_or_else(|| anyhow!("usage: margin show ID [notes,ai,transcript|all]"))?;
+            let id = pos.get(1).ok_or_else(|| anyhow!("usage: milkrice show ID [notes,ai,transcript|all]"))?;
             let secs = agent::parse_sections(pos.get(2).copied().unwrap_or("ai,notes"))?;
             agent::show(&store, id, &secs, json)?
         }
         "tx" | "transcript" => {
-            let id = pos.get(1).ok_or_else(|| anyhow!("usage: margin tx ID [--from mm:ss] [--to mm:ss] [--speaker NAME] [--grep TEXT]"))?;
+            let id = pos.get(1).ok_or_else(|| anyhow!("usage: milkrice tx ID [--from mm:ss] [--to mm:ss] [--speaker NAME] [--grep TEXT]"))?;
             agent::transcript(
                 &store,
                 id,
@@ -224,7 +224,7 @@ fn agent_cmd(args: &[String]) -> Result<Option<String>> {
             agent::search(&store, &q, scope, limit(20), json)?
         }
         "mcp" => {
-            margin_core::mcp::serve(&store)?;
+            milkrice_core::mcp::serve(&store)?;
             String::new()
         }
         _ => unreachable!(),
@@ -261,10 +261,10 @@ fn main() {
 fn dev_main(args: Vec<String>) -> Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
     if let Ok(a) = std::env::var("ACCEL") {
-        margin_core::transcribe_rs::set_ort_accelerator(match a.as_str() {
-            "coreml" => margin_core::transcribe_rs::OrtAccelerator::CoreMl,
-            "auto" => margin_core::transcribe_rs::OrtAccelerator::Auto,
-            _ => margin_core::transcribe_rs::OrtAccelerator::CpuOnly,
+        milkrice_core::transcribe_rs::set_ort_accelerator(match a.as_str() {
+            "coreml" => milkrice_core::transcribe_rs::OrtAccelerator::CoreMl,
+            "auto" => milkrice_core::transcribe_rs::OrtAccelerator::Auto,
+            _ => milkrice_core::transcribe_rs::OrtAccelerator::CpuOnly,
         });
     }
     let a = |i: usize| args.get(i).map(String::as_str).unwrap_or("");
@@ -297,9 +297,9 @@ fn dev_main(args: Vec<String>) -> Result<()> {
         }
         "embed" => embed_matrix(&args[1..])?,
         "ics" => {
-            let text = margin_core::ics::fetch(a(1))?;
+            let text = milkrice_core::ics::fetch(a(1))?;
             let now = chrono::Utc::now();
-            for e in margin_core::ics::parse(&text, "feed", None, now, now + chrono::Duration::days(90)) {
+            for e in milkrice_core::ics::parse(&text, "feed", None, now, now + chrono::Duration::days(90)) {
                 println!("{} {} | {} people | {:?}", e.start.format("%Y-%m-%d %H:%M"), e.title, e.attendees.len(), e.meeting_url);
             }
         }
@@ -309,9 +309,9 @@ fn dev_main(args: Vec<String>) -> Result<()> {
             }
         }
         "calendar" => {
-            println!("auth: {:?}", margin_core::calendar::auth_status());
+            println!("auth: {:?}", milkrice_core::calendar::auth_status());
             let now = chrono::Utc::now();
-            for e in margin_core::calendar::events_between(now, now + chrono::Duration::days(7))? {
+            for e in milkrice_core::calendar::events_between(now, now + chrono::Duration::days(7))? {
                 println!("{} {} ({} attendees) {:?}", e.start, e.title, e.attendees.len(), e.meeting_url);
             }
         }
@@ -330,7 +330,7 @@ pub fn embed_matrix(files: &[String]) -> Result<()> {
     let mut e = SpeakerEmbedder::load(&path)?;
     let embs: Vec<Vec<f32>> = files.iter().map(|f| e.embed(&read_wav16k(Path::new(f)).unwrap())).collect::<Result<_>>()?;
     for (i, a) in embs.iter().enumerate() {
-        let row: Vec<String> = embs.iter().map(|b| format!("{:5.2}", margin_core::diarize::cosine(a, b))).collect();
+        let row: Vec<String> = embs.iter().map(|b| format!("{:5.2}", milkrice_core::diarize::cosine(a, b))).collect();
         println!("{:<10} {}", Path::new(&files[i]).file_name().unwrap().to_string_lossy(), row.join(" "));
     }
     Ok(())
