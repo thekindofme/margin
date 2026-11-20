@@ -2675,7 +2675,7 @@ dependencies = [
 
 [[package]]
 name = "milkrice"
-version = "0.1.0"
+version = "0.1.0-rc1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2700,7 +2700,7 @@ dependencies = [
 
 [[package]]
 name = "milkrice-core"
-version = "0.1.0"
+version = "0.1.0-rc1"
 dependencies = [
  "anyhow",
  "block2",
