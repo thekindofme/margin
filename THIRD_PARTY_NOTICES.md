@@ -12,7 +12,7 @@ Models are not bundled with Milkrice. Users download them on demand from their u
 | Canary 180M Flash, Canary 1B v2 | NVIDIA | CC-BY-4.0 | ONNX int8 conversions by istupakov (changes: format conversion and quantization) |
 | Whisper Small, Medium, Large v3 Turbo | OpenAI | MIT | GGML conversions from whisper.cpp |
 | Moonshine Base | Moonshine AI | MIT | |
-| Moonshine v2 Medium (streaming) | Moonshine AI | see model card | |
+| Moonshine v2 Medium (streaming) | Moonshine AI | MIT | mirrored unmodified at huggingface.co/milkrice/moonshine-streaming-medium-en |
 | SenseVoice Small | FunAudioLLM | FunASR model license | |
 | Cohere Transcribe | Cohere | see model card | |
 | WeSpeaker ResNet34 (VoxCeleb) | WeSpeaker | see the WeSpeaker and sherpa-onnx repositories | speaker embeddings |

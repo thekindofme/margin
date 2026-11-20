@@ -116,13 +116,13 @@ const F_MOONSHINE_BASE: &[ModelFile] = &[
     ModelFile { url: "https://huggingface.co/moonshine-ai/moonshine/resolve/48b4e427b587bcf67797a5be706d6ddc4a298149/onnx/merged/base/float/tokenizer.json", name: "tokenizer.json", size: 3761751, sha256: "ad3a2ceb0e84e4da57451d86fa337f8116dcff5f5d106434f8aa0b0de89718b9" },
 ];
 const F_MOONSHINE_MEDIUM: &[ModelFile] = &[
-    ModelFile { url: "https://download.moonshine.ai/model/medium-streaming-en/quantized/frontend.ort", name: "frontend.ort", size: 47467256, sha256: "378fe8a5d7090a1b9ab88bbb1fc95bde010cdd64ec23419350d2d23c675636e9" },
-    ModelFile { url: "https://download.moonshine.ai/model/medium-streaming-en/quantized/encoder.ort", name: "encoder.ort", size: 94202872, sha256: "a5f11167a62eef61787fe8410453257d6ddb8eba90af461a9604e5f2e93d5322" },
-    ModelFile { url: "https://download.moonshine.ai/model/medium-streaming-en/quantized/adapter.ort", name: "adapter.ort", size: 3647712, sha256: "16307442b7f4229f2f1511fc51b545cec9616e55872c588f3a297bbc6f4762ea" },
-    ModelFile { url: "https://download.moonshine.ai/model/medium-streaming-en/quantized/cross_kv.ort", name: "cross_kv.ort", size: 11544952, sha256: "354b9a955caeb768b528f447f0a36ce4b850ca7b4531900165df304d97904fba" },
-    ModelFile { url: "https://download.moonshine.ai/model/medium-streaming-en/quantized/decoder_kv.ort", name: "decoder_kv.ort", size: 146216448, sha256: "fa67aa87521247f5bf44d3e44d4e4978e58c1f114249c3c6909c882624056715" },
-    ModelFile { url: "https://download.moonshine.ai/model/medium-streaming-en/quantized/streaming_config.json", name: "streaming_config.json", size: 513, sha256: "28e83b7a28e91472692a035e0dae3116422ae43aeb2bef5ed822c44ce89b88af" },
-    ModelFile { url: "https://download.moonshine.ai/model/medium-streaming-en/quantized/tokenizer.bin", name: "tokenizer.bin", size: 249974, sha256: "6884b35fd6377d4c4d32336a0bc152f36b64d1e45b6503683cdc238250a8472d" },
+    ModelFile { url: "https://huggingface.co/milkrice/moonshine-streaming-medium-en/resolve/0b8af8ae18434331ab897269db81b2011a9c37a2/quantized/frontend.ort", name: "frontend.ort", size: 47467256, sha256: "378fe8a5d7090a1b9ab88bbb1fc95bde010cdd64ec23419350d2d23c675636e9" },
+    ModelFile { url: "https://huggingface.co/milkrice/moonshine-streaming-medium-en/resolve/0b8af8ae18434331ab897269db81b2011a9c37a2/quantized/encoder.ort", name: "encoder.ort", size: 94202872, sha256: "a5f11167a62eef61787fe8410453257d6ddb8eba90af461a9604e5f2e93d5322" },
+    ModelFile { url: "https://huggingface.co/milkrice/moonshine-streaming-medium-en/resolve/0b8af8ae18434331ab897269db81b2011a9c37a2/quantized/adapter.ort", name: "adapter.ort", size: 3647712, sha256: "16307442b7f4229f2f1511fc51b545cec9616e55872c588f3a297bbc6f4762ea" },
+    ModelFile { url: "https://huggingface.co/milkrice/moonshine-streaming-medium-en/resolve/0b8af8ae18434331ab897269db81b2011a9c37a2/quantized/cross_kv.ort", name: "cross_kv.ort", size: 11544952, sha256: "354b9a955caeb768b528f447f0a36ce4b850ca7b4531900165df304d97904fba" },
+    ModelFile { url: "https://huggingface.co/milkrice/moonshine-streaming-medium-en/resolve/0b8af8ae18434331ab897269db81b2011a9c37a2/quantized/decoder_kv.ort", name: "decoder_kv.ort", size: 146216448, sha256: "fa67aa87521247f5bf44d3e44d4e4978e58c1f114249c3c6909c882624056715" },
+    ModelFile { url: "https://huggingface.co/milkrice/moonshine-streaming-medium-en/resolve/0b8af8ae18434331ab897269db81b2011a9c37a2/quantized/streaming_config.json", name: "streaming_config.json", size: 513, sha256: "28e83b7a28e91472692a035e0dae3116422ae43aeb2bef5ed822c44ce89b88af" },
+    ModelFile { url: "https://huggingface.co/milkrice/moonshine-streaming-medium-en/resolve/0b8af8ae18434331ab897269db81b2011a9c37a2/quantized/tokenizer.bin", name: "tokenizer.bin", size: 249974, sha256: "6884b35fd6377d4c4d32336a0bc152f36b64d1e45b6503683cdc238250a8472d" },
 ];
 
 pub const MODELS: &[ModelSpec] = &[
