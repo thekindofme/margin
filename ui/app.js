@@ -1471,7 +1471,7 @@ async function loadCalendarSources() {
       <div class="pi"><b>Calendars on this Mac</b><span>${macOk ? `${c.event_count} upcoming events${c.calendars_with_events.length ? ` from ${esc(c.calendars_with_events.join(", "))}` : ""}. Includes any account added in System Settings → Internet Accounts.` : "Needs Calendar permission (Permissions above)."}</span></div>
       ${macOk ? '<span class="badge sage">Connected</span>' : ""}</div>
     ${feeds}
-    <details class="gcal" ${c.feeds.length ? "" : "open"}><summary><b>Add Google Calendar</b> <span class="hint">— two ways, both without giving Milkrice your Google password</span></summary>
+    <details class="gcal" ${c.feeds.length || (macOk && c.event_count) ? "" : "open"}><summary><b>Add Google Calendar</b> <span class="hint">— two ways, both without giving Milkrice your Google password</span></summary>
       <div class="gcal-body">
         <p><b>Least access (recommended):</b> paste your calendar's <i>secret address in iCal format</i>. Milkrice can only read that one calendar, can't change anything, and you can revoke it any time by resetting the address in Google.</p>
         <ol class="steps-mini">
