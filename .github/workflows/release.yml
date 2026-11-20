@@ -138,7 +138,7 @@ jobs:
           releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: true
           prerelease: false
-          uploadUpdaterJson: ${{ steps.detect.outputs.updater }}
+          includeUpdaterJson: ${{ steps.detect.outputs.updater }}
           args: >-
             --bundles app,dmg
             ${{ steps.detect.outputs.updater != 'true' && format('--config {0}/no-updater.json', runner.temp) || '' }}

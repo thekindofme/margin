@@ -8,6 +8,10 @@
     "beforeBuildCommand": {
       "script": "cargo build --release -p milkrice-core --bin milkrice-cli",
       "cwd": ".."
+    },
+    "beforeBundleCommand": {
+      "script": "sh scripts/sign-cli.sh",
+      "cwd": ".."
     }
   },
   "app": {
