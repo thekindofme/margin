@@ -143,6 +143,20 @@ jobs:
             --bundles app,dmg
             ${{ steps.detect.outputs.updater != 'true' && format('--config {0}/no-updater.json', runner.temp) || '' }}
 
+      # tauri-action notarizes and staples the .app, but not the DMG around it. Notarize the
+      # DMG too so Gatekeeper accepts the download itself, then replace the release asset.
+      - name: Notarize and staple the DMG
+        if: steps.detect.outputs.sign == 'true' && steps.detect.outputs.notarize == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dmg=$(ls target/release/bundle/dmg/*.dmg)
+          xcrun notarytool submit "$dmg" --key "$APPLE_API_KEY_PATH" --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" --wait --timeout 30m
+          xcrun stapler staple "$dmg"
+          xcrun stapler validate "$dmg"
+          spctl -a -vvv -t open --context context:primary-signature "$dmg"
+          gh release upload "$GITHUB_REF_NAME" "$dmg" --clobber --repo "$GITHUB_REPOSITORY"
+
       - name: Checksums
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
