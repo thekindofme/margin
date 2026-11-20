@@ -65,11 +65,10 @@ Signing needs the first three. Notarization additionally needs the three `APPLE_
 
 The key pair was generated once with `cargo tauri signer generate`. The public half is in `src-tauri/tauri.conf.json` and must never change, or installed apps can no longer verify updates. The private half and its password are kept outside the repo. Keep a backup somewhere safe: losing the key means shipping a manual re-install to every user.
 
-On the maintainer's Mac the key file is `~/.tauri/margin-updater.key` and the password is in the login Keychain (service `margin-updater-key`, account `margin-updater`):
+The maintainer keeps every signing secret in one 1Password item, **"Milkrice code signing (Developer ID + updater key)"** (Personal vault): the Developer ID `.p12`, its private key and certificate, the App Store Connect `.p8`, the updater key, all their passwords, and the Key/Issuer IDs. Nothing is left on disk. To refill a secret, read it from 1Password with the item's ID (`op item list | grep Milkrice`):
 
 ```bash
-pbcopy < ~/.tauri/margin-updater.key                                   # TAURI_SIGNING_PRIVATE_KEY
-security find-generic-password -a margin-updater -s margin-updater-key -w | pbcopy   # TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+op read "op://Personal/<item-id>/updater-key" | gh secret set TAURI_SIGNING_PRIVATE_KEY -R thekindofme/milkrice
 ```
 
 **Homebrew tap token (`HOMEBREW_TAP_TOKEN`)**
@@ -80,9 +79,11 @@ Create a fine-grained personal access token (GitHub > Settings > Developer setti
 
 To confirm bundling and updater artifacts without CI (unsigned):
 
+Local builds (`scripts/build-local.sh`) skip updater artifacts via the git-ignored `src-tauri/tauri.local.conf.json` (`"createUpdaterArtifacts": false`), so no secrets are needed. To test updater artifacts too, pull the key from 1Password for that one command:
+
 ```bash
-export TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/margin-updater.key)"
-export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(security find-generic-password -a margin-updater -s margin-updater-key -w)"
+TAURI_SIGNING_PRIVATE_KEY="$(op read "op://Personal/<item-id>/updater-key")" \
+TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(op read "op://Personal/<item-id>/<password-field>")" \
 cargo tauri build --bundles app,dmg
 ```
 
