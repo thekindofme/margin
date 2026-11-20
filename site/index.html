@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..600,100;1,9..144,300..600,100&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/site.css?v=13">
+<link rel="stylesheet" href="css/site.css?v=18">
 <link rel="preload" as="image" href="assets/plate.webp" type="image/webp">
 <script>(function(d){if(!matchMedia('(prefers-reduced-motion: reduce)').matches)d.className='live '+(window.CSS&&CSS.supports('animation-timeline: view()')&&!/[?&]nosda/.test(location.search)?'sda':'no-sda')})(document.documentElement)</script>
 </head>
@@ -50,7 +50,16 @@
       <p class="req">Apple Silicon, macOS 14.2 or later. MIT licensed. <a href="https://github.com/thekindofme/milkrice">View source on GitHub</a></p>
     </div>
     <figure class="hero-art">
-      <div class="hero-stage"><div class="hero-plate"><img src="assets/plate.webp" alt="A clay plate lined with banana leaf, holding nine diamond-shaped pieces of milk rice with a spoonful of red chili sambol in the centre." width="880" height="880" fetchpriority="high"></div></div>
+      <div class="hero-stage"><div class="hero-plate"><img src="assets/plate.webp" alt="A clay plate lined with banana leaf, holding nine diamond-shaped pieces of milk rice with a spoonful of red chili sambol in the centre." width="880" height="880" fetchpriority="high"></div>
+        <svg class="steam" viewBox="0 0 200 200" aria-hidden="true" focusable="false">
+          <defs><filter id="steam-blur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4.5"/></filter></defs>
+          <g filter="url(#steam-blur)" fill="none" stroke-linecap="round">
+            <path class="w w1" d="M78 150 C66 128 92 116 80 94 C70 76 90 64 82 44"/>
+            <path class="w w2" d="M100 156 C112 132 88 118 102 96 C114 76 92 62 104 38"/>
+            <path class="w w3" d="M122 150 C134 130 110 114 122 92 C132 74 114 62 120 46"/>
+            <path class="w w4" d="M90 140 C98 122 84 108 94 90 C102 76 90 66 96 54"/>
+          </g>
+        </svg></div>
       <figcaption class="hero-cap">Kiribath, cut the way it's always been.</figcaption>
     </figure>
   </section>
