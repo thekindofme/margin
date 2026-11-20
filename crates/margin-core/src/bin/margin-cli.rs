@@ -102,6 +102,7 @@ fn simulate(model: &str, mic: &Path, system: &Path, provider: Option<Provider>) 
         audio_secs / took,
         res.clusterer.centroids.len()
     );
+    println!("end-of-meeting tidy-up: {:?}", res.relabel);
 
     let segs = sink.segs.lock().clone();
     let Some(p) = provider else { return Ok(()) };

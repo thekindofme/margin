@@ -205,8 +205,22 @@ fn ai_folder_pick(state: &AppState, id: &str, p: llm::Provider, model: &str) {
         list.push_str(&format!("- {} (e.g. {})\n", f.name, if titles.is_empty() { "empty".to_string() } else { titles.join("; ") }));
     }
     let text: String = note_info(&m).text.chars().take(2500).collect();
-    let sys = "You file meeting notes into the user's folders. Reply with exactly one folder name from the list, or NONE if no folder clearly fits. No other words.";
-    let prompt = format!("Folders:\n{list}\nMeeting: {}\n\nNotes:\n{text}", if m.title.is_empty() { "Untitled" } else { &m.title });
+    let sys = "You file meeting notes into the user's folders. A folder means what its name says, as shown by its example notes. \
+If the folder is named after a company, client, person or project, the meeting must be with or about that same one: \
+a meeting with a different company or person does NOT fit, even if it is the same kind of meeting (another interview, another sales call). \
+When unsure, answer NONE; a wrong folder is worse than none. \
+Reply with exactly one folder name from the list, or NONE. No other words.";
+    let with: Vec<String> = m
+        .attendees
+        .iter()
+        .filter(|a| !a.is_self)
+        .map(|a| match &a.email { Some(e) if !e.is_empty() => format!("{} <{e}>", a.name), _ => a.name.clone() })
+        .collect();
+    let prompt = format!(
+        "Folders:\n{list}\nMeeting: {}\nWith: {}\n\nNotes:\n{text}",
+        if m.title.is_empty() { "Untitled" } else { &m.title },
+        if with.is_empty() { "unknown".to_string() } else { with.join(", ") }
+    );
     let hint = match llm::complete(p, model, sys, &prompt) {
         Ok(out) => {
             let ans = out.lines().next().unwrap_or("").trim().trim_matches(|c: char| c == '"' || c == '.' || c == '*').to_string();
@@ -319,6 +333,7 @@ pub fn stop(app: &AppHandle, run_ai: bool) -> Result<()> {
         let offset = rec.offset_ms;
         let result = rec.session.stop();
         let _ = state.store.mark_stopped(&id, offset + result.duration_ms);
+        tidy_speakers(&state, &id, &result.relabel);
         state.voiceprints.lock().insert(id.clone(), result.clusterer);
         let _ = app2.emit("meeting-updated", json!({"id": id}));
         emit_rec_state(&app2);
@@ -343,6 +358,7 @@ pub fn stop_and_wait(app: &AppHandle, timeout: std::time::Duration) {
         let state = app2.state::<AppState>();
         let result = rec.session.stop();
         let _ = state.store.mark_stopped(&rec.meeting_id, rec.offset_ms + result.duration_ms);
+        tidy_speakers(&state, &rec.meeting_id, &result.relabel);
         state.voiceprints.lock().insert(rec.meeting_id.clone(), result.clusterer);
         let _ = tx.send(());
     });
@@ -385,6 +401,63 @@ fn set_busy(app: &AppHandle, id: &str, what: Option<&str>) {
         None => state.busy.lock().remove(id),
     };
     let _ = app.emit("busy", json!({"id": id, "what": what}));
+}
+
+/// After a recording stops: apply the end-of-meeting speaker tidy-up to the stored lines
+/// (carrying any names across), then name the main voice from the calendar if that's clear.
+pub fn tidy_speakers(state: &AppState, id: &str, relabel: &[(String, String)]) {
+    if !relabel.is_empty() {
+        if let Ok(Some(mut m)) = state.store.get_meeting(id) {
+            for (from, to) in relabel {
+                let _ = state.store.reassign_speaker(id, from, to);
+                if let Some(name) = m.speakers.remove(from) {
+                    if !m.speakers.contains_key(to) {
+                        m.speakers.insert(to.clone(), name);
+                        if m.speakers_guessed.contains(from) && !m.speakers_guessed.contains(to) {
+                            m.speakers_guessed.push(to.clone());
+                        }
+                    }
+                }
+                m.speakers_guessed.retain(|k| k != from);
+            }
+            let _ = state.store.set_field(id, "speakers", &serde_json::to_string(&m.speakers).unwrap_or_default());
+            let _ = state.store.set_field(id, "speakers_guessed", &serde_json::to_string(&m.speakers_guessed).unwrap_or_default());
+            log::info!("speakers tidied: {} merged", relabel.len());
+        }
+    }
+    name_by_structure(state, id);
+}
+
+/// Exactly one other person is expected (from the invite and title) and one remote voice did
+/// nearly all the talking: that voice is them. Marked as guessed, so it shows as a guess the
+/// user can confirm or rename. Never touches a name already set. Returns true if it named one.
+pub fn name_by_structure(state: &AppState, id: &str) -> bool {
+    let Ok(Some(m)) = state.store.get_meeting(id) else { return false };
+    let Ok(segs) = state.store.segments(id) else { return false };
+    let mut time: std::collections::BTreeMap<&str, u64> = Default::default();
+    for s in segs.iter().filter(|s| s.source == margin_core::AudioSource::System) {
+        *time.entry(s.speaker.as_str()).or_default() += s.end_ms.saturating_sub(s.start_ms);
+    }
+    let total: u64 = time.values().sum();
+    if total < 30_000 {
+        return false;
+    }
+    let Some((label, t)) = time.iter().max_by_key(|(_, t)| **t) else { return false };
+    if (*t as f64) < 0.9 * total as f64 || m.speakers.contains_key(*label) {
+        return false;
+    }
+    let cands = margin_core::names::candidates(&m.title, &m.attendees, &state.settings().user_name);
+    let [name] = cands.as_slice() else { return false };
+    let mut speakers = m.speakers.clone();
+    let mut guessed = m.speakers_guessed.clone();
+    speakers.insert(label.to_string(), name.clone());
+    if !guessed.iter().any(|g| g == label) {
+        guessed.push(label.to_string());
+    }
+    let _ = state.store.set_field(id, "speakers", &serde_json::to_string(&speakers).unwrap_or_default());
+    let _ = state.store.set_field(id, "speakers_guessed", &serde_json::to_string(&guessed).unwrap_or_default());
+    log::info!("named the main remote voice from the calendar ({} of remote talk)", *t * 100 / total);
+    true
 }
 
 /// Name speakers, title the meeting and write enhanced notes.
@@ -526,6 +599,7 @@ pub fn selftest(app: AppHandle, dir: std::path::PathBuf) {
             drop(tx);
             let res = session.stop();
             state.store.mark_stopped(&m.id, res.duration_ms)?;
+            tidy_speakers(&state, &m.id, &res.relabel);
             after_meeting(&app, &m.id)?;
             let m = state.store.get_meeting(&m.id)?.ok_or_else(|| anyhow!("gone"))?;
             println!("SELFTEST title: {}", m.title);

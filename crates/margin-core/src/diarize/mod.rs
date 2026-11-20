@@ -119,6 +119,11 @@ impl SpeakerClusterer {
             .map(|(i, _)| i)
     }
 
+    /// Closest known speaker if at least `min` similar.
+    pub fn nearest_above(&self, emb: &[f32], min: f32) -> Option<usize> {
+        self.nearest(emb).filter(|&i| cosine(&self.centroids[i], emb) >= min)
+    }
+
     pub fn assign(&mut self, emb: &[f32]) -> usize {
         let mut best: Option<(usize, f32)> = None;
         for (i, c) in self.centroids.iter().enumerate() {
@@ -177,5 +182,190 @@ impl SpeakerClusterer {
             break;
         }
         merged
+    }
+}
+
+/// One system-audio segment as the worker labelled it, kept until the end of the meeting.
+#[derive(Debug, Clone)]
+pub struct Labelled {
+    pub label: String,
+    /// Voice print, when the clip was long enough to get one.
+    pub emb: Option<Vec<f32>>,
+    pub secs: f32,
+}
+
+/// A speaker with at most this much talk time (and under [`FOLD_SHARE`] of all remote talk)
+/// is a leftover of noisy early clips rather than a real person.
+const FOLD_SECS: f32 = 10.0;
+const FOLD_SHARE: f32 = 0.03;
+/// Clips at least this long gave a trustworthy voice print when the speaker was created.
+const LONG_CLIP_SECS: f32 = 2.5;
+/// A small speaker that was created from a long clip is only folded when this similar.
+const FOLD_MIN_SIM: f32 = 0.35;
+
+/// End-of-meeting tidy-up of remote speakers: merge speakers whose voices turn out to be the
+/// same person, and fold tiny leftovers (a few short, noisy clips) into the nearest real
+/// speaker. Returns `(from, to)` label renames; chains are resolved.
+pub fn consolidate(items: &[Labelled], threshold: f32) -> Vec<(String, String)> {
+    struct C {
+        label: String,
+        sum: Vec<f32>,
+        secs: f32,
+        long: bool,
+    }
+    let mut cs: Vec<C> = Vec::new();
+    for it in items {
+        let i = match cs.iter().position(|c| c.label == it.label) {
+            Some(i) => i,
+            None => {
+                cs.push(C { label: it.label.clone(), sum: vec![], secs: 0.0, long: false });
+                cs.len() - 1
+            }
+        };
+        let c = &mut cs[i];
+        c.secs += it.secs;
+        if let Some(e) = &it.emb {
+            c.long |= it.secs >= LONG_CLIP_SECS;
+            if c.sum.is_empty() {
+                c.sum = vec![0.0; e.len()];
+            }
+            if c.sum.len() == e.len() {
+                for (s, v) in c.sum.iter_mut().zip(e) {
+                    *s += v * it.secs; // duration-weighted
+                }
+            }
+        }
+    }
+    let total: f32 = cs.iter().map(|c| c.secs).sum();
+    let sim = |a: &C, b: &C| if a.sum.is_empty() || b.sum.is_empty() { f32::NAN } else { cosine(&a.sum, &b.sum) };
+    for i in 0..cs.len() {
+        for j in i + 1..cs.len() {
+            log::info!(
+                "speakers {} ({:.0}s) vs {} ({:.0}s): similarity {:.2}",
+                cs[i].label, cs[i].secs, cs[j].label, cs[j].secs, sim(&cs[i], &cs[j])
+            );
+        }
+    }
+    let mut renames: Vec<(String, String)> = Vec::new();
+    let absorb = |cs: &mut Vec<C>, from: usize, to: usize, renames: &mut Vec<(String, String)>| {
+        let f = cs.remove(from);
+        let to = if to > from { to - 1 } else { to };
+        let t = &mut cs[to];
+        if t.sum.is_empty() {
+            t.sum = f.sum.clone();
+        } else if f.sum.len() == t.sum.len() {
+            for (a, b) in t.sum.iter_mut().zip(&f.sum) {
+                *a += b;
+            }
+        }
+        t.secs += f.secs;
+        t.long |= f.long;
+        log::info!("speaker {} folded into {}", f.label, t.label);
+        renames.push((f.label, t.label.clone()));
+    };
+    // 1. Same voice under two labels: merge the smaller into the larger.
+    'merge: loop {
+        for i in 0..cs.len() {
+            for j in i + 1..cs.len() {
+                if sim(&cs[i], &cs[j]) >= threshold + 0.1 {
+                    let (from, to) = if cs[i].secs < cs[j].secs { (i, j) } else { (j, i) };
+                    absorb(&mut cs, from, to, &mut renames);
+                    continue 'merge;
+                }
+            }
+        }
+        break;
+    }
+    // 2. Tiny leftovers go to the nearest real speaker.
+    let small = |c: &C| c.secs < FOLD_SECS && c.secs < FOLD_SHARE * total;
+    'fold: loop {
+        if !cs.iter().any(|c| !small(c)) {
+            break;
+        }
+        for i in 0..cs.len() {
+            if !small(&cs[i]) {
+                continue;
+            }
+            let best = (0..cs.len())
+                .filter(|&j| j != i && !small(&cs[j]))
+                .map(|j| (j, sim(&cs[i], &cs[j])))
+                .max_by(|a, b| {
+                    let (x, y) = (if a.1.is_nan() { -1.0 } else { a.1 }, if b.1.is_nan() { -1.0 } else { b.1 });
+                    x.partial_cmp(&y).unwrap_or(std::cmp::Ordering::Equal).then(cs[a.0].secs.partial_cmp(&cs[b.0].secs).unwrap_or(std::cmp::Ordering::Equal))
+                });
+            if let Some((j, s)) = best {
+                // Built only from short clips: its voice print was never reliable. Built from a
+                // long clip: it might be a real, brief participant, so only fold a clear match.
+                if !cs[i].long || s >= FOLD_MIN_SIM {
+                    absorb(&mut cs, i, j, &mut renames);
+                    continue 'fold;
+                }
+            }
+        }
+        break;
+    }
+    // Resolve chains (a -> b, b -> c  =>  a -> c).
+    let resolved: Vec<(String, String)> = renames
+        .iter()
+        .map(|(f, t)| {
+            let mut t = t.clone();
+            while let Some((_, n)) = renames.iter().find(|(x, _)| *x == t) {
+                t = n.clone();
+            }
+            (f.clone(), t)
+        })
+        .collect();
+    resolved
+}
+
+#[cfg(test)]
+mod consolidate_tests {
+    use super::*;
+
+    fn v(x: f32, y: f32) -> Option<Vec<f32>> {
+        Some(vec![x, y, 0.1])
+    }
+    fn it(label: &str, emb: Option<Vec<f32>>, secs: f32) -> Labelled {
+        Labelled { label: label.into(), emb, secs }
+    }
+
+    #[test]
+    fn folds_noisy_early_seed_into_main_speaker() {
+        // s1: two short noisy clips; s2: the real voice for 12 minutes.
+        let mut items = vec![it("s1", v(0.2, 1.0), 1.9), it("s1", v(0.3, 1.0), 2.4)];
+        for _ in 0..80 {
+            items.push(it("s2", v(1.0, 0.1), 9.0));
+        }
+        assert_eq!(consolidate(&items, 0.5), vec![("s1".to_string(), "s2".to_string())]);
+    }
+
+    #[test]
+    fn keeps_two_real_speakers_apart() {
+        let mut items = vec![];
+        for _ in 0..40 {
+            items.push(it("s1", v(1.0, 0.0), 8.0));
+            items.push(it("s2", v(0.0, 1.0), 8.0));
+        }
+        assert!(consolidate(&items, 0.5).is_empty());
+    }
+
+    #[test]
+    fn brief_but_distinct_participant_survives() {
+        // s3 spoke once for 6 s with a clear, different voice: not a leftover.
+        let mut items = vec![it("s3", v(-1.0, 0.0), 6.0)];
+        for _ in 0..60 {
+            items.push(it("s1", v(0.0, 1.0), 9.0));
+        }
+        assert!(consolidate(&items, 0.5).is_empty());
+    }
+
+    #[test]
+    fn same_voice_under_two_labels_merges() {
+        let mut items = vec![];
+        for _ in 0..20 {
+            items.push(it("s1", v(1.0, 0.05), 8.0));
+            items.push(it("s2", v(1.0, 0.0), 6.0));
+        }
+        assert_eq!(consolidate(&items, 0.5), vec![("s2".to_string(), "s1".to_string())]);
     }
 }

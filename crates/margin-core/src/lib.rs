@@ -11,6 +11,7 @@ pub mod ics;
 pub mod llm;
 pub mod mcp;
 pub mod models;
+pub mod names;
 pub mod obsidian;
 pub mod paths;
 pub mod permissions;

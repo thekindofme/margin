@@ -61,6 +61,9 @@ impl Default for SessionConfig {
 pub struct SessionResult {
     pub duration_ms: u64,
     pub clusterer: SpeakerClusterer,
+    /// Speaker renames from the end-of-meeting tidy-up (`(from, to)`), to apply to the
+    /// stored segments.
+    pub relabel: Vec<(String, String)>,
 }
 
 pub struct Session {
@@ -71,7 +74,7 @@ pub struct Session {
     paused: Arc<AtomicBool>,
     elapsed: Arc<AtomicU64>,
     segmenter: Option<JoinHandle<()>>,
-    worker: Option<JoinHandle<SpeakerClusterer>>,
+    worker: Option<JoinHandle<(SpeakerClusterer, Vec<(String, String)>)>>,
     started: Instant,
     pub system_active: bool,
 }
@@ -458,12 +461,12 @@ impl Session {
         if let Some(h) = self.segmenter.take() {
             let _ = h.join();
         }
-        let clusterer = self
+        let (clusterer, relabel) = self
             .worker
             .take()
             .and_then(|h| h.join().ok())
-            .unwrap_or_else(|| SpeakerClusterer::new(crate::diarize::DEFAULT_THRESHOLD));
-        SessionResult { duration_ms, clusterer }
+            .unwrap_or_else(|| (SpeakerClusterer::new(crate::diarize::DEFAULT_THRESHOLD), vec![]));
+        SessionResult { duration_ms, clusterer, relabel }
     }
 }
 
@@ -646,6 +649,11 @@ fn split_turns(samples: &[f32], emb: &mut SpeakerEmbedder) -> Vec<(usize, usize)
 
 /// Utterances shorter than this can't create a new speaker (see worker_loop).
 const MIN_NEW_SPEAKER_SECS: f32 = 2.5;
+/// ...nor can ones with fewer words than this (a long clip of "mm", noise or a cough).
+const MIN_NEW_SPEAKER_WORDS: usize = 4;
+/// A short clip joins its nearest speaker only when at least this similar; otherwise it is
+/// given to whoever spoke last.
+const SHORT_CLIP_MIN_SIM: f32 = 0.3;
 
 fn worker_loop(
     rx: Receiver<SourcedUtterance>,
@@ -655,7 +663,9 @@ fn worker_loop(
     speaker_base: usize,
     sys_progress: Arc<SysProgress>,
     sink: Arc<dyn SessionSink>,
-) -> SpeakerClusterer {
+) -> (SpeakerClusterer, Vec<(String, String)>) {
+    // Every remote segment's label and voice print, for the end-of-meeting tidy-up.
+    let mut labelled: Vec<crate::diarize::Labelled> = Vec::new();
     // Mic segments wait until the system side has caught up past them (or ECHO_MAX_HOLD), so
     // overlapping system speech can mark them as echo.
     let mut pending_mic: Vec<(Segment, Instant)> = Vec::new();
@@ -711,26 +721,40 @@ fn worker_loop(
                 if text.is_empty() {
                     continue;
                 }
+                let dur = samples.len() as f32 / SAMPLE_RATE as f32;
+                let mut voice: Option<Vec<f32>> = None;
                 let speaker = match source {
                     AudioSource::Mic => "me".to_string(),
-                    AudioSource::System => {
-                        let dur = samples.len() as f32 / SAMPLE_RATE as f32;
-                        match &embedder {
-                            // Short clips give noisy voice prints: they may only match someone already
-                            // heard. Only a longer utterance can introduce a new speaker.
-                            Some(emb) if dur >= 0.8 => match emb.lock().embed(samples) {
-                                Ok(v) if dur < MIN_NEW_SPEAKER_SECS => match clusterer.nearest(&v) {
-                                    Some(i) => format!("s{}", i + 1 + speaker_base),
-                                    None => format!("s{}", clusterer.assign(&v) + 1 + speaker_base),
-                                },
-                                Ok(v) => format!("s{}", clusterer.assign(&v) + 1 + speaker_base),
-                                Err(_) => last_sys_speaker.clone(),
-                            },
-                            Some(_) => last_sys_speaker.clone(),
-                            None => "them".into(),
-                        }
-                    }
+                    AudioSource::System => match &embedder {
+                        // Short or near-empty clips give noisy voice prints: they may only join a
+                        // speaker already heard, never create one. Before anyone is known, they
+                        // take the first speaker's label without seeding it, so a noisy first
+                        // "hello?" can't become a phantom speaker.
+                        Some(emb) if dur >= 0.8 => match emb.lock().embed(samples) {
+                            Ok(v) => {
+                                let can_seed = dur >= MIN_NEW_SPEAKER_SECS && words(&text).len() >= MIN_NEW_SPEAKER_WORDS;
+                                let label = if can_seed {
+                                    format!("s{}", clusterer.assign(&v) + 1 + speaker_base)
+                                } else if clusterer.centroids.is_empty() {
+                                    format!("s{}", 1 + speaker_base)
+                                } else {
+                                    match clusterer.nearest_above(&v, SHORT_CLIP_MIN_SIM) {
+                                        Some(i) => format!("s{}", i + 1 + speaker_base),
+                                        None => last_sys_speaker.clone(),
+                                    }
+                                };
+                                voice = Some(v);
+                                label
+                            }
+                            Err(_) => last_sys_speaker.clone(),
+                        },
+                        Some(_) => last_sys_speaker.clone(),
+                        None => "them".into(),
+                    },
                 };
+                if source == AudioSource::System && embedder.is_some() {
+                    labelled.push(crate::diarize::Labelled { label: speaker.clone(), emb: voice, secs: dur });
+                }
                 let seg = Segment { id: 0, start_ms, end_ms, source, speaker: speaker.clone(), text };
                 match source {
                     AudioSource::Mic => pending_mic.push((seg, Instant::now())),
@@ -751,7 +775,8 @@ fn worker_loop(
         flush(&mut pending_mic, &recent_sys, false);
     }
     flush(&mut pending_mic, &recent_sys, true);
-    clusterer
+    let relabel = crate::diarize::consolidate(&labelled, clusterer.threshold);
+    (clusterer, relabel)
 }
 
 #[cfg(test)]

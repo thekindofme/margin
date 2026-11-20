@@ -674,17 +674,33 @@ pub async fn identify_speakers(app: AppHandle, id: String) -> R<()> {
         let state = app.state::<AppState>();
         let mut m = state.store.get_meeting(&id)?.ok_or_else(|| anyhow::anyhow!("not found"))?;
         let segs = state.store.segments(&id)?;
-        let (p, model) = recorder::provider(&state)?;
-        let (sys, prompt) = llm::speaker_names_prompt(&m, &segs)
-            .ok_or_else(|| anyhow::anyhow!("No other speakers in this meeting."))?;
-        let map = llm::parse_speaker_map(&llm::complete(p, &model, &sys, &prompt)?);
-        anyhow::ensure!(!map.is_empty(), "Couldn't tell who's who from the conversation — name speakers by clicking them.");
-        for k in map.keys() {
-            if !m.speakers_guessed.contains(k) {
-                m.speakers_guessed.push(k.clone());
+        // The calendar can settle a 1:1 without any AI.
+        if recorder::name_by_structure(&state, &id) {
+            m = state.store.get_meeting(&id)?.ok_or_else(|| anyhow::anyhow!("not found"))?;
+            let unnamed = segs.iter().any(|s| s.source == margin_core::AudioSource::System && !m.speakers.contains_key(&s.speaker));
+            if !unnamed {
+                let _ = app.emit("meeting-updated", json!({"id": id}));
+                crate::export::schedule(&app, &id);
+                return Ok(());
             }
         }
-        m.speakers.extend(map);
+        let (p, model) = recorder::provider(&state)?;
+        let (sys, prompt) = llm::speaker_names_prompt(&recorder::with_user_name(&state, m.clone()), &segs)
+            .ok_or_else(|| anyhow::anyhow!("No other speakers in this meeting."))?;
+        let map = llm::parse_speaker_map(&llm::complete(p, &model, &sys, &prompt)?);
+        // Only fill in names the user hasn't set: a confirmed name always wins.
+        let mut added = 0;
+        for (k, v) in map {
+            if m.speakers.contains_key(&k) && !m.speakers_guessed.contains(&k) {
+                continue;
+            }
+            if !m.speakers_guessed.contains(&k) {
+                m.speakers_guessed.push(k.clone());
+            }
+            m.speakers.insert(k, v);
+            added += 1;
+        }
+        anyhow::ensure!(added > 0, "Couldn't tell who's who from the conversation — name speakers by clicking them.");
         state.store.set_field(&id, "speakers", &serde_json::to_string(&m.speakers)?)?;
         state.store.set_field(&id, "speakers_guessed", &serde_json::to_string(&m.speakers_guessed)?)?;
         let _ = app.emit("meeting-updated", json!({"id": id}));

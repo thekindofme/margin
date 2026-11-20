@@ -436,8 +436,20 @@ pub fn speaker_names_prompt(m: &Meeting, segments: &[Segment]) -> Option<(String
     if keys.is_empty() {
         return None;
     }
-    let system = "You identify who is speaking in a meeting transcript. Output ONLY a JSON object mapping speaker labels to real names, e.g. {\"s2\": \"Priya Shah\"}. Assign a name ONLY with direct evidence in the transcript: the speaker introduces themselves (\"this is Priya\"), or another speaker addresses someone by name and that label answers right after (\"Rishi, can you own this?\" followed by s2 saying \"Yes, I will...\"), or someone is greeted by name and replies. Prefer the full name from the invite list when it matches the first name used. Being on the invite list is NOT evidence by itself. A speaker who addresses someone by name is NOT that person. Omit every label you are not sure about; an empty object {} is a fine answer. Never label 'me'.";
+    let system = "You identify who is speaking in a meeting transcript. Output ONLY a JSON object mapping speaker labels to real names, e.g. {\"s2\": \"Priya Shah\"}. Assign a name ONLY with direct evidence in the transcript: the speaker introduces themselves (\"this is Priya\"), or another speaker addresses someone by name and that label answers right after (\"Rishi, can you own this?\" followed by s2 saying \"Yes, I will...\"), or someone is greeted by name and replies. Prefer the full name from the invite list when it matches the first name used. Being on the invite list is NOT evidence by itself. One exception: if exactly one likely person is listed below and one label did nearly all of the other side's talking, that label is that person. A speaker who addresses someone by name is NOT that person. Omit every label you are not sure about; an empty object {} is a fine answer. Never label 'me'.";
     let mut p = meeting_header(m);
+    let user = m.speakers.get("me").map(String::as_str).unwrap_or("");
+    let cands = crate::names::candidates(&m.title, &m.attendees, user);
+    if !cands.is_empty() {
+        p.push_str(&format!("\nLikely people (from the invite and title): {}\n", cands.join(", ")));
+    }
+    let mut time: BTreeMap<&str, u64> = BTreeMap::new();
+    for s in segments.iter().filter(|s| s.source == AudioSource::System) {
+        *time.entry(s.speaker.as_str()).or_default() += s.end_ms.saturating_sub(s.start_ms);
+    }
+    let total = time.values().sum::<u64>().max(1);
+    let shares: Vec<String> = time.iter().map(|(k, t)| format!("{k} {}%", t * 100 / total)).collect();
+    p.push_str(&format!("Share of the other side's talking: {}\n", shares.join(", ")));
     p.push_str(&format!("\nLabels to identify: {}\n\nTranscript (labels shown in brackets):\n", keys.join(", ")));
     let mut raw = String::new();
     for s in segments {
