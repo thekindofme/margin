@@ -29,9 +29,7 @@ pub struct ModelSpec {
     pub name: &'static str,
     pub tagline: &'static str,
     pub engine: Engine,
-    /// Legacy single download (a .tar.gz or .bin); used only when `files` is empty.
-    pub url: &'static str,
-    /// Files fetched from the model's upstream source (preferred).
+    /// Files fetched from the model's upstream source.
     #[serde(skip)]
     pub files: &'static [ModelFile],
     /// Directory (for archives) or file name (for Whisper .bin) inside the models dir.
@@ -48,9 +46,6 @@ pub struct ModelSpec {
 }
 
 impl ModelSpec {
-    pub fn is_archive(&self) -> bool {
-        self.files.is_empty() && self.url.ends_with(".tar.gz")
-    }
     /// True when the model lives in a directory (everything except single-file Whisper).
     pub fn is_dir(&self) -> bool {
         self.engine != Engine::Whisper
@@ -136,7 +131,6 @@ pub const MODELS: &[ModelSpec] = &[
         name: "Parakeet TDT 0.6B v3",
         tagline: "Fast, accurate notes in 25 European languages",
         engine: Engine::Parakeet,
-        url: "https://blob.handy.computer/parakeet-v3-int8.tar.gz",
         files: F_PARAKEET_V3,
         local_name: "parakeet-tdt-0.6b-v3-int8",
         size_mb: 671,
@@ -152,7 +146,6 @@ pub const MODELS: &[ModelSpec] = &[
         name: "Parakeet TDT 0.6B v2",
         tagline: "The sharpest English model for everyday meetings",
         engine: Engine::Parakeet,
-        url: "https://blob.handy.computer/parakeet-v2-int8.tar.gz",
         files: F_PARAKEET_V2,
         local_name: "parakeet-tdt-0.6b-v2-int8",
         size_mb: 661,
@@ -168,7 +161,6 @@ pub const MODELS: &[ModelSpec] = &[
         name: "Canary 180M Flash",
         tagline: "Tiny and instant, runs well on any hardware",
         engine: Engine::Canary,
-        url: "https://blob.handy.computer/canary-180m-flash.tar.gz",
         files: F_CANARY_180M,
         local_name: "canary-180m-flash",
         size_mb: 213,
@@ -184,7 +176,6 @@ pub const MODELS: &[ModelSpec] = &[
         name: "Canary 1B v2",
         tagline: "Accurate multilingual with translation",
         engine: Engine::Canary,
-        url: "https://blob.handy.computer/canary-1b-v2.tar.gz",
         files: F_CANARY_1B,
         local_name: "canary-1b-v2",
         size_mb: 1029,
@@ -200,7 +191,6 @@ pub const MODELS: &[ModelSpec] = &[
         name: "Whisper Medium",
         tagline: "Broadest language coverage, a little slower",
         engine: Engine::Whisper,
-        url: "https://blob.handy.computer/whisper-medium-q4_1.bin",
         files: F_WHISPER_MEDIUM,
         local_name: "ggml-medium-q5_0.bin",
         size_mb: 539,
@@ -216,7 +206,6 @@ pub const MODELS: &[ModelSpec] = &[
         name: "Whisper Large v3 Turbo",
         tagline: "Big-model quality across 99 languages, GPU accelerated",
         engine: Engine::Whisper,
-        url: "https://blob.handy.computer/ggml-large-v3-turbo.bin",
         files: F_WHISPER_TURBO,
         local_name: "ggml-large-v3-turbo.bin",
         size_mb: 1625,
@@ -232,7 +221,6 @@ pub const MODELS: &[ModelSpec] = &[
         name: "Whisper Small",
         tagline: "Light multilingual model for older machines",
         engine: Engine::Whisper,
-        url: "https://blob.handy.computer/ggml-small.bin",
         files: F_WHISPER_SMALL,
         local_name: "ggml-small.bin",
         size_mb: 488,
@@ -248,7 +236,6 @@ pub const MODELS: &[ModelSpec] = &[
         name: "Moonshine v2 Medium",
         tagline: "Streaming English, made for live captions",
         engine: Engine::MoonshineStreaming,
-        url: "https://blob.handy.computer/moonshine-medium-streaming-en.tar.gz",
         files: F_MOONSHINE_MEDIUM,
         local_name: "moonshine-medium-streaming-en",
         size_mb: 303,
@@ -264,7 +251,6 @@ pub const MODELS: &[ModelSpec] = &[
         name: "Moonshine Base",
         tagline: "Very small and quick English model",
         engine: Engine::Moonshine,
-        url: "https://blob.handy.computer/moonshine-base.tar.gz",
         files: F_MOONSHINE_BASE,
         local_name: "moonshine-base",
         size_mb: 77,

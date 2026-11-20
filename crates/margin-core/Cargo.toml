@@ -18,8 +18,6 @@ uuid = { version = "1", features = ["v4", "serde"] }
 dirs = "6"
 rusqlite = { version = "0.37", features = ["bundled"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls", "stream", "json"] }
-flate2 = "1"
-tar = "0.4"
 hound = "3"
 which = "8"
 rrule = "0.14"

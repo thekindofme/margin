@@ -31,11 +31,7 @@ pub fn is_downloaded(spec: &ModelSpec) -> bool {
             fs::metadata(&p).map(|m| m.len() == spec.files[0].size).unwrap_or(false)
         };
     }
-    if spec.is_archive() {
-        p.is_dir() && fs::read_dir(&p).map(|mut d| d.next().is_some()).unwrap_or(false)
-    } else {
-        p.is_file()
-    }
+    false
 }
 
 pub fn statuses() -> Vec<ModelStatus> {
@@ -193,37 +189,7 @@ pub fn download(spec: &ModelSpec, cancel: &AtomicBool, progress: impl FnMut(u64,
     if !spec.files.is_empty() {
         return download_files(spec, cancel, progress);
     }
-    let models = paths::models_dir();
-    if !spec.is_archive() {
-        return download_file(spec.url, &local_path(spec), cancel, progress);
-    }
-    let archive = models.join(format!("{}.tar.gz", spec.local_name));
-    download_file(spec.url, &archive, cancel, progress)?;
-    let staging = models.join(format!(".{}.extract", spec.local_name));
-    let _ = fs::remove_dir_all(&staging);
-    fs::create_dir_all(&staging)?;
-    let res = (|| -> Result<()> {
-        let f = fs::File::open(&archive)?;
-        let mut ar = tar::Archive::new(flate2::read::GzDecoder::new(std::io::BufReader::new(f)));
-        ar.unpack(&staging).context("unpacking model")?;
-        // Archives usually hold one top-level folder; use it as the model dir.
-        let entries: Vec<_> = fs::read_dir(&staging)?
-            .filter_map(|e| e.ok())
-            .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
-            .collect();
-        let src = if entries.len() == 1 && entries[0].path().is_dir() {
-            entries[0].path()
-        } else {
-            staging.clone()
-        };
-        let dest = local_path(spec);
-        let _ = fs::remove_dir_all(&dest);
-        fs::rename(&src, &dest)?;
-        Ok(())
-    })();
-    let _ = fs::remove_file(&archive);
-    let _ = fs::remove_dir_all(&staging);
-    res
+    Err(anyhow!("model {} has no download files", spec.id))
 }
 
 pub fn delete(spec: &ModelSpec) -> Result<()> {
