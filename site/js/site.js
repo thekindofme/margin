@@ -13,6 +13,14 @@
     });
   });
 
+  // The film section stays out of the page until its poster is actually there.
+  const film = document.getElementById('film');
+  if (film) {
+    const probe = new Image();
+    probe.onload = () => { film.hidden = false; };
+    probe.src = film.querySelector('video').getAttribute('poster');
+  }
+
   if (!root.classList.contains('no-sda')) return;
 
   // Story: map scroll position through the pinned section to --p (0..1); CSS does the rest.
