@@ -146,11 +146,114 @@ const HELP: &str = "milkrice — read your local Milkrice meetings (agent-friend
   milkrice show ID [notes,ai,transcript|all]      one meeting; default ai,notes (labelled by source)
   milkrice tx ID [--from mm:ss] [--to mm:ss] [--speaker NAME] [--grep TEXT] [-n 300]
   milkrice search TEXT [--in notes|ai|transcript] [-n 20]
-  milkrice mcp                                    MCP server on stdio (tools: list_meetings, get_meeting, get_transcript, search)
-  add --json to ls/show/tx/search for JSON.  ID = 8-char prefix from ls.
+  milkrice mcp                                    MCP server on stdio (5 tools: list_meetings, list_folders, get_meeting, get_transcript, search)
+  add --json to ls/folders/show/tx/search for JSON.  ID = 8-char prefix from ls.
+
+Connect agents:
+  milkrice agents status [--json]                 what's installed for each agent, and any problems
+  milkrice agents install AGENT [--dry-run]       AGENT: claude, codex, cursor, opencode, vscode, skill, cli or all
+  milkrice agents uninstall AGENT [--dry-run]     undo it (only Milkrice's own entries are removed)
+  milkrice skill                                  print the skill (SKILL.md) for manual install
+  milkrice --version
 
 Sources: NOTES = typed by the user · AI SUMMARY = LLM-written (named) · TRANSCRIPT = local speech-to-text ('Me' = user)
 Dev: milkrice dev models|download|transcribe|simulate|providers|calendar|embed";
+
+/// `milkrice agents status|install|uninstall …`
+fn agents_cmd(args: &[String]) -> Result<()> {
+    use milkrice_core::agents_install::{self as ai, Env};
+    let json = args.iter().any(|a| a == "--json");
+    let pos: Vec<&str> = args.iter().map(String::as_str).filter(|a| !a.starts_with('-')).collect();
+    // The binary to link ~/.local/bin/milkrice to: this one, resolved through any symlink.
+    let me = std::env::current_exe().ok().and_then(|p| p.canonicalize().ok());
+    let mut env = Env::from_system(me);
+    env.dry_run = args.iter().any(|a| a == "--dry-run");
+    match pos.first().copied().unwrap_or("status") {
+        "status" => {
+            let st = ai::status(&env);
+            if json {
+                println!("{}", serde_json::to_string_pretty(&st)?);
+                return Ok(());
+            }
+            match (&st.command, &st.command_source) {
+                (Some(c), Some(ai::CliSource::App)) => println!("milkrice command   not installed (agents would use {c}); run `milkrice agents install cli`"),
+                (Some(c), Some(src)) => println!("milkrice command   {c} ({})", serde_json::to_value(src)?.as_str().unwrap_or("")),
+                _ => println!("milkrice command   not found"),
+            }
+            if let Some(h) = &st.path_hint {
+                println!("                   ! {h}");
+            }
+            if let Some(id) = &st.claude_plugin {
+                println!("Claude Code plugin {id} (provides MCP + skill)");
+            }
+            for a in &st.agents {
+                let state = if a.connected {
+                    "connected"
+                } else if a.mcp.is_some() || !a.skills.is_empty() {
+                    "partly installed"
+                } else if a.detected {
+                    "not connected"
+                } else {
+                    "not detected"
+                };
+                println!("\n{:<18} {state}", a.name);
+                if let Some(m) = &a.mcp {
+                    println!("  mcp    {} → {}{}", m.file, m.command.as_deref().unwrap_or("?"), if m.works { "" } else { " (missing)" });
+                }
+                for s in &a.skills {
+                    println!("  skill  {s}");
+                }
+                for w in &a.warnings {
+                    println!("  ! {w}");
+                }
+            }
+            Ok(())
+        }
+        verb @ ("install" | "uninstall") => {
+            let which = pos.get(1).ok_or_else(|| anyhow!("usage: milkrice agents {verb} <claude|codex|cursor|opencode|vscode|skill|cli|all>"))?;
+            let installing = verb == "install";
+            let mut failed = false;
+            let mut hints = std::collections::BTreeSet::new();
+            for t in ai::expand(&env, which, installing)? {
+                let res = if installing { ai::install(&env, t) } else { ai::uninstall(&env, t) };
+                match res {
+                    Ok(log) => {
+                        println!("{}:", t.label());
+                        for l in &log.changed {
+                            println!("  {l}");
+                        }
+                        for l in &log.unchanged {
+                            println!("  = {l}");
+                        }
+                        for w in log.warnings {
+                            // The PATH hint repeats for each target; print it once at the end.
+                            if w.contains("isn't on your shell PATH") {
+                                hints.insert(w);
+                            } else {
+                                println!("  ! {w}");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        failed = true;
+                        eprintln!("{}: error: {e}", t.label());
+                    }
+                }
+            }
+            for h in hints {
+                println!("\n! {h}");
+            }
+            if installing && !env.dry_run && !failed {
+                println!("\nRestart the agent (or start a new session) to pick it up.");
+            }
+            if failed {
+                bail!("some targets failed");
+            }
+            Ok(())
+        }
+        other => bail!("unknown agents command '{other}' (expected status, install or uninstall)"),
+    }
+}
 
 fn flag<'a>(args: &'a [String], names: &[&str]) -> Option<&'a str> {
     args.iter().position(|a| names.contains(&a.as_str())).and_then(|i| args.get(i + 1)).map(String::as_str)
@@ -187,6 +290,10 @@ fn agent_cmd(args: &[String]) -> Result<Option<String>> {
         return Ok(None);
     }
     let db = milkrice_core::paths::db_path();
+    if cmd == "mcp" {
+        milkrice_core::mcp::serve(&mut milkrice_core::mcp::LazyStore::new(db))?;
+        return Ok(Some(String::new()));
+    }
     anyhow::ensure!(db.is_file(), "no Milkrice data yet ({}) — record a meeting first", db.display());
     let store = milkrice_core::store::Store::open_readonly(&db)?;
     let out = match cmd {
@@ -223,10 +330,6 @@ fn agent_cmd(args: &[String]) -> Result<Option<String>> {
             };
             agent::search(&store, &q, scope, limit(20), json)?
         }
-        "mcp" => {
-            milkrice_core::mcp::serve(&store)?;
-            String::new()
-        }
         _ => unreachable!(),
     };
     Ok(Some(out))
@@ -237,6 +340,24 @@ fn main() {
     if args.is_empty() || matches!(args[0].as_str(), "-h" | "--help" | "help") {
         println!("{HELP}");
         return;
+    }
+    match args[0].as_str() {
+        "-V" | "--version" | "version" => {
+            println!("milkrice {}", env!("CARGO_PKG_VERSION"));
+            return;
+        }
+        "skill" => {
+            print!("{}", milkrice_core::agents_install::SKILL_MD);
+            return;
+        }
+        "agents" => {
+            if let Err(e) = agents_cmd(&args[1..]) {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
+            return;
+        }
+        _ => {}
     }
     match agent_cmd(&args) {
         Ok(Some(out)) => {

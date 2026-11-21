@@ -8,6 +8,15 @@ use std::io::{BufRead, Write};
 
 const PROTOCOL: &str = "2025-06-18";
 
+/// Sent in the `initialize` result. Not every client loads the skill, so the source-labelling
+/// rule is repeated here.
+fn instructions() -> String {
+    format!(
+        "{}\n\nRules:\n- When you quote or attribute something, say which source it came from (\"per your notes…\", \"the AI summary lists…\", \"in the transcript Priya said…\").\n- Check numbers, dates and commitments against the TRANSCRIPT; the AI SUMMARY may be wrong.\n- Work cheapest first: list_meetings or search to find the meeting, get_meeting for notes and summary, then get_transcript with from/to/speaker/grep for only the lines you need.\n- Access is read-only; nothing here can change the user's meetings.",
+        agent::OVERVIEW
+    )
+}
+
 fn tools() -> Value {
     json!([
         {
@@ -104,7 +113,28 @@ fn call(store: &Store, name: &str, args: &Value) -> Result<String> {
     }
 }
 
-fn handle(store: &Store, req: &Value) -> Option<Value> {
+/// The meetings database, opened on first use. Lets the server start (and agents connect) before
+/// the first meeting is recorded; tools then say there's no data yet instead of failing.
+pub struct LazyStore {
+    path: std::path::PathBuf,
+    store: Option<Store>,
+}
+
+impl LazyStore {
+    pub fn new(path: std::path::PathBuf) -> Self {
+        LazyStore { path, store: None }
+    }
+
+    fn get(&mut self) -> Result<&Store> {
+        if self.store.is_none() {
+            anyhow::ensure!(self.path.is_file(), "no Milkrice meetings yet ({} doesn't exist). Record a meeting in the Milkrice app first.", self.path.display());
+            self.store = Some(Store::open_readonly(&self.path)?);
+        }
+        Ok(self.store.as_ref().expect("just set"))
+    }
+}
+
+fn handle(db: &mut LazyStore, req: &Value) -> Option<Value> {
     let id = req.get("id").cloned();
     let method = req.get("method").and_then(|m| m.as_str()).unwrap_or("");
     let result = match method {
@@ -112,14 +142,14 @@ fn handle(store: &Store, req: &Value) -> Option<Value> {
             "protocolVersion": req["params"]["protocolVersion"].as_str().unwrap_or(PROTOCOL),
             "capabilities": {"tools": {}},
             "serverInfo": {"name": "milkrice", "version": env!("CARGO_PKG_VERSION")},
-            "instructions": agent::OVERVIEW,
+            "instructions": instructions(),
         }),
         "ping" => json!({}),
         "tools/list" => json!({"tools": tools()}),
         "tools/call" => {
             let name = req["params"]["name"].as_str().unwrap_or("");
             let args = req["params"].get("arguments").cloned().unwrap_or(json!({}));
-            match call(store, name, &args) {
+            match db.get().and_then(|store| call(store, name, &args)) {
                 Ok(text) => json!({"content": [{"type": "text", "text": text}]}),
                 Err(e) => json!({"content": [{"type": "text", "text": format!("error: {e}")}], "isError": true}),
             }
@@ -131,7 +161,7 @@ fn handle(store: &Store, req: &Value) -> Option<Value> {
 }
 
 /// Serve MCP on stdin/stdout until EOF.
-pub fn serve(store: &Store) -> Result<()> {
+pub fn serve(db: &mut LazyStore) -> Result<()> {
     let stdin = std::io::stdin();
     let mut out = std::io::stdout().lock();
     for line in stdin.lock().lines() {
@@ -141,10 +171,10 @@ pub fn serve(store: &Store) -> Result<()> {
         }
         let resp = match serde_json::from_str::<Value>(&line) {
             Ok(Value::Array(batch)) => {
-                let r: Vec<Value> = batch.iter().filter_map(|m| handle(store, m)).collect();
+                let r: Vec<Value> = batch.iter().filter_map(|m| handle(db, m)).collect();
                 if r.is_empty() { None } else { Some(Value::Array(r)) }
             }
-            Ok(req) => handle(store, &req),
+            Ok(req) => handle(db, &req),
             Err(e) => Some(json!({"jsonrpc": "2.0", "id": null, "error": {"code": -32700, "message": e.to_string()}})),
         };
         if let Some(r) = resp {
@@ -153,4 +183,34 @@ pub fn serve(store: &Store) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn initialize_and_tools() {
+        let dir = std::env::temp_dir().join(format!("milkrice-mcp-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // No database yet: the server still starts and lists tools; calls explain what's missing.
+        let mut db = LazyStore::new(dir.join("t.sqlite"));
+        let init = handle(&mut db, &json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})).unwrap();
+        let r = &init["result"];
+        assert_eq!(r["serverInfo"]["version"], env!("CARGO_PKG_VERSION"));
+        let ins = r["instructions"].as_str().unwrap();
+        assert!(ins.contains("AI SUMMARY") && ins.contains("which source"));
+        let list = handle(&mut db, &json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})).unwrap();
+        let tools = list["result"]["tools"].as_array().unwrap();
+        assert_eq!(tools.len(), 5, "README and --help say 5 tools");
+        assert!(tools.iter().all(|t| t["annotations"]["readOnlyHint"] == true));
+        let call = json!({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "list_folders"}});
+        let r = handle(&mut db, &call).unwrap();
+        assert_eq!(r["result"]["isError"], true);
+        assert!(r["result"]["content"][0]["text"].as_str().unwrap().contains("no Milkrice meetings yet"));
+        Store::open(&dir.join("t.sqlite")).unwrap();
+        let r = handle(&mut db, &call).unwrap();
+        assert!(r["result"].get("isError").is_none(), "{r}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
