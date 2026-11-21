@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+/// Records from other devices, keyed by meeting id.
+pub type RecordsByMeeting = BTreeMap<String, Vec<Record>>;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VaultFile {
     pub format: u32,
@@ -82,7 +85,7 @@ impl Vault {
     }
 
     /// Every other device's records, grouped by meeting. Unreadable files are reported, not fatal.
-    pub fn read_records(&self, own_device: &str) -> Result<(BTreeMap<String, Vec<Record>>, Vec<String>)> {
+    pub fn read_records(&self, own_device: &str) -> Result<(RecordsByMeeting, Vec<String>)> {
         let mut out: BTreeMap<String, Vec<Record>> = BTreeMap::new();
         let mut problems = Vec::new();
         let dir = self.root.join("m");
