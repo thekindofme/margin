@@ -1,0 +1,35 @@
+/* Milkrice film. One 1920×1080 stage, scaled to fit. */
+:root {
+  --cream: #fbf5e6;
+  --ink: #1f1a14;
+  --serif: "Fraunces", "New York", ui-serif, "Iowan Old Style", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: var(--cream); overflow: hidden; }
+#stage { position: fixed; inset: 0; display: grid; place-items: center; cursor: pointer; }
+#frame {
+  position: absolute; left: 50%; top: 50%;
+  width: 1920px; height: 1080px;
+  transform-origin: 0 0;
+  transform: translate(-50%, -50%);
+  overflow: hidden;
+  background: var(--cream);
+}
+#film { display: block; position: absolute; inset: 0; }
+/* Static paper grain. Kept faint so the encoder is not fighting noise. */
+#grain {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .32  0 0 0 0 .24  0 0 0 0 .12  0 0 0 .55 -.14'/%3E%3C/filter%3E%3Crect width='320' height='320' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: multiply;
+  opacity: .34;
+}
+
+svg text { font-family: var(--sans); fill: var(--ink); }
+svg .serif { font-family: var(--serif); font-variation-settings: "SOFT" 100; font-weight: 400; letter-spacing: -0.02em; }
+svg .em { font-style: italic; fill: #2e6b34; }
+svg .mono { font-family: var(--mono); }
+svg .ui { font-weight: 450; letter-spacing: -0.01em; }
+svg .eyebrow { font-weight: 600; letter-spacing: 0.14em; }
+svg .num { font-variant-numeric: tabular-nums; }
