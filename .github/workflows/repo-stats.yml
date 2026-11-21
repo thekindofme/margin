@@ -1,0 +1,54 @@
+name: Repo stats
+
+# Daily snapshot of GitHub traffic (views, clones, referrers, popular pages),
+# stars/forks and release download counts, committed to the `stats` branch.
+# GitHub only keeps traffic for 14 days, so this is what keeps the history.
+# Needs a STATS_TOKEN secret: a fine-grained token for this repo with
+# "Administration: read" (traffic) and "Contents: read". See docs/ANALYTICS.md.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repo-stats
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: src
+
+      - name: Check out the stats branch
+        run: |
+          if git ls-remote --exit-code --heads "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" stats >/dev/null; then
+            git clone --depth 1 --branch stats "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" stats
+          else
+            mkdir stats && cd stats && git init -b stats
+            git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}"
+            printf '# Milkrice stats\n\nDaily snapshots written by .github/workflows/repo-stats.yml on main.\n' > README.md
+          fi
+
+      - name: Collect
+        env:
+          GITHUB_TOKEN: ${{ secrets.STATS_TOKEN }}
+        run: python3 src/scripts/stats/collect.py "${{ github.repository }}" stats
+
+      - name: Commit
+        working-directory: stats
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
+          git commit -q -m "Stats for $(date -u +%F)"
+          git push origin stats
+
+      - name: Summary
+        run: python3 src/scripts/stats/report.py stats >> "$GITHUB_STEP_SUMMARY"
