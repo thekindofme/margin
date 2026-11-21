@@ -29,26 +29,32 @@ pub struct ProviderInfo {
     pub detail: String,
 }
 
-/// PATH from the user's login shell. GUI apps on macOS start with a bare PATH, which would hide
-/// CLIs installed via Homebrew, npm, fnm, etc.
-pub fn shell_path() -> &'static str {
-    static P: OnceLock<String> = OnceLock::new();
+/// The PATH a new terminal would have, exactly as the user's login shell reports it (no extras
+/// added). Used to tell whether `milkrice` will be found when the user or an agent runs it.
+pub fn login_shell_path() -> Option<&'static str> {
+    static P: OnceLock<Option<String>> = OnceLock::new();
     P.get_or_init(|| {
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
         let out = Command::new(&shell)
             .args(["-ilc", "printf '__MILKRICE_PATH__%s__END__' \"$PATH\""])
             .stdin(Stdio::null())
             .stderr(Stdio::null())
-            .output();
-        let mut path = out
-            .ok()
-            .and_then(|o| {
-                let s = String::from_utf8_lossy(&o.stdout).to_string();
-                let a = s.find("__MILKRICE_PATH__")? + "__MILKRICE_PATH__".len();
-                let b = s[a..].find("__END__")? + a;
-                Some(s[a..b].to_string())
-            })
-            .unwrap_or_default();
+            .output()
+            .ok()?;
+        let s = String::from_utf8_lossy(&out.stdout).to_string();
+        let a = s.find("__MILKRICE_PATH__")? + "__MILKRICE_PATH__".len();
+        let b = s[a..].find("__END__")? + a;
+        Some(s[a..b].to_string())
+    })
+    .as_deref()
+}
+
+/// PATH from the user's login shell. GUI apps on macOS start with a bare PATH, which would hide
+/// CLIs installed via Homebrew, npm, fnm, etc.
+pub fn shell_path() -> &'static str {
+    static P: OnceLock<String> = OnceLock::new();
+    P.get_or_init(|| {
+        let mut path = login_shell_path().unwrap_or_default().to_string();
         let home = dirs::home_dir().unwrap_or_default();
         for extra in [
             home.join(".local/bin"),

@@ -1,5 +1,6 @@
 //! Milkrice core: local-first meeting capture, transcription, speakers, calendar and AI notes.
 pub mod agent;
+pub mod agents_install;
 pub mod audio;
 pub mod audio_rec;
 pub mod calendar;
