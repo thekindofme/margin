@@ -120,7 +120,7 @@ fn mac_and_simulated_iphone() {
     desktop::sync_pass(&cfg, &mac_vault, &store).unwrap();
     assert!(desktop::iphone_meetings().contains("phone-2"));
     let (recs2, _) = phone_vault.read_records("phone").unwrap();
-    assert!(recs2["phone-2"][0].fields.get("origin").is_none(), "the Mac must not claim a phone meeting");
+    assert!(!recs2["phone-2"][0].fields.contains_key("origin"), "the Mac must not claim a phone meeting");
     assert_eq!(recs2["phone-2"][0].fields["mode"].v, json!("room"));
     assert_eq!(recs2["mac-1"][0].fields["origin"].v, json!("mac"), "the Mac keeps sending its own origin");
 
