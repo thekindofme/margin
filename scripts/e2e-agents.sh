@@ -27,4 +27,17 @@ out=$(cd "$T" && echo "$q" | claude -p --model haiku --mcp-config "$T/mcp.json" 
 check "claude + mcp" "[a-z]" "$out"; echo "      → $out"
 out=$(cd "$T" && codex exec --skip-git-repo-check --ephemeral --sandbox read-only -c model_reasoning_effort=low -c 'notify=[]' -c "mcp_servers.milkrice.command=\"$CLI\"" -c 'mcp_servers.milkrice.args=["mcp"]' -o "$T/c.txt" "$q Use the milkrice MCP tools." </dev/null >/dev/null 2>&1; cat "$T/c.txt")
 check "codex + mcp" "[a-z]" "$out"; echo "      → $out"
+# Installer: a throwaway HOME, so nothing in your real ~/.cursor, ~/.codex or ~/.agents changes.
+H="$T/home"; mkdir -p "$H/.cursor" "$H/.codex"
+echo '{"mcpServers":{"other":{"command":"x"}}}' > "$H/.cursor/mcp.json"
+agents() { env -u CLAUDE_CONFIG_DIR -u CODEX_HOME -u COPILOT_HOME -u XDG_CONFIG_HOME HOME="$H" "$CLI" agents "$@" 2>&1; }
+out=$(agents install cursor; agents install codex; cat "$H/.cursor/mcp.json" "$H/.codex/config.toml")
+check "agents install merges configs" '"other".*|mcp_servers.milkrice' "$out"
+out=$(agents status); check "agents status" "Cursor +connected" "$out"
+out=$(agents uninstall all; cat "$H/.cursor/mcp.json"; ls "$H/.agents/skills" "$H/.codex" 2>&1)
+if grep -q '"milkrice"' <<<"$out" || [ -e "$H/.codex/config.toml" ] || [ -e "$H/.agents/skills/milkrice" ]; then echo "FAIL  agents uninstall all"; echo "$out" | head -20; fail=$((fail+1)); else echo "PASS  agents uninstall all"; pass=$((pass+1)); fi
+out=$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | HOME="$T" PATH="$T/bin:$PATH" "$ROOT/scripts/milkrice-mcp")
+check "plugin MCP shim" "serverInfo" "$out"
+if command -v claude >/dev/null; then out=$(claude plugin validate "$ROOT" 2>&1); check "claude plugin validate" "Validation passed" "$out"; fi
+
 echo "$pass passed, $fail failed"; [ "$fail" = 0 ]
