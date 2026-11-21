@@ -1,6 +1,7 @@
 /* Milkrice — the hero demo. One function, render(t), draws the whole scripted story for a
-   moment in time, so playing, pausing, seeking (the step pills) and the static
-   reduced-motion frame are all the same code path. The markup is the finished frame. */
+   moment in time: first the Mac window, then the iPhone beside it. Whichever device isn't
+   playing rests on a still frame. render(t) is the same for playing, pausing, seeking (the step pills) and the static
+   reduced-motion frame, so they are all the same code path. The markup is the finished frame. */
 (() => {
   'use strict';
   const demo = document.getElementById('demo');
@@ -10,7 +11,7 @@
   ['banner', 'bStart', 'vHome', 'vNote', 'curSub', 'curDot', 'dur', 'tNotes', 'tTx', 'txN', 'pTx', 'pNotes', 'cue',
     'raw', 'done', 'typed', 'caret', 'busy', 'ai', 'yours', 'dock', 'timer', 'stop', 'stopL', 'term', 'q', 'qCaret', 'tool', 'ans']
     .forEach((k) => { el[k] = $(k); });
-  const pills = [...demo.querySelectorAll('.dsteps li')];
+  const pills = [...demo.querySelectorAll('.dsteps li:not(.dgrp)')];
   const lines = [...demo.querySelectorAll('.dline')].map((n) => ({ n, p: n.querySelector('p'), words: n.querySelector('p').textContent.split(' ') }));
   const aiRows = [...el.ai.children];
   const typedFull = el.typed.textContent;
@@ -18,7 +19,8 @@
 
   // The script, in seconds.
   const STEP = [0, 2.4, 9.2, 14.6, 20.2];
-  const END = 28.5, FADE = 27.9;
+  const MAC_END = 27.2;   // the terminal has had its say; the iPhone takes over
+  const MAC_REST = 19.9;  // the Mac's still frame while the iPhone plays: the written-up note
   const LINE_AT = [3.0, 4.6, 6.1, 7.7];
   const TYPE_AT = 9.9, TYPE_CPS = 15;
   const WRITTEN_AT = 16.9, TERM_AT = 20.7, Q_AT = 21.3, Q_CPS = 20;
@@ -35,11 +37,9 @@
   const mmss = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
   const recEnd = Math.floor((STEP[3] - STEP[1]) * REC_RATE);
 
-  function render(t) {
+  function renderMac(t) {
     const step = t < STEP[1] ? 1 : t < STEP[2] ? 2 : t < STEP[3] ? 3 : t < STEP[4] ? 4 : 5;
-    set('step', step, (v) => { demo.dataset.step = v; });
-    pills.forEach((li, i) => { cls(li, 'on', i + 1 === step); cls(li, 'done', i + 1 < step); });
-    cls(demo, 'out', t >= FADE);
+    set('macStep', step, (v) => { demo.dataset.mac = v; });
 
     // 1. the nudge
     cls(el.banner, 'on', t >= 0.5 && t < STEP[1]);
@@ -95,6 +95,78 @@
     cls(el.qCaret, 'on', t >= TERM_AT && t < TOOL_AT);
     cls(el.tool, 'on', t >= TOOL_AT);
     cls(el.ans, 'on', t >= ANS_AT);
+    return step;
+  }
+
+  // The iPhone, in seconds from when it takes over.
+  const P = {};
+  ['phone', 'vHome', 'listen', 'sheet', 'go', 'vRec', 'timer', 'stop', 'vLock', 'lTimer', 'vNote', 'pPill', 'pBusy', 'pAi', 'pYours']
+    .forEach((k) => { P[k] = demo.querySelector(`[data-p="${k}"]`); });
+  const plines = [...P.vRec.querySelectorAll('.pline')].map((n) => ({ n, s: n.querySelector('span'), words: n.querySelector('span').textContent.split(' ') }));
+  const pRows = [...P.pAi.children].filter((n) => !n.classList.contains('ph-ai-h'));
+  const PSTEP = [0, 4.2, 10.8, 15.6];
+  const P_LISTEN = 0.9, P_SHEET = 1.3, P_GO = 3.4;
+  const P_LINE_AT = [5.0, 6.9, 8.8];
+  const P_STOP = PSTEP[3] + 0.5, P_NOTE = PSTEP[3] + 1.0, P_WRITTEN = PSTEP[3] + 3.0;
+  const P_LEN = 1387;                  // 23:07 of conversation, in fast-forward
+  const P_RATE = P_LEN / (P_NOTE - PSTEP[1]);
+  const clock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+  function renderPhone(t) {
+    const step = t < PSTEP[1] ? 1 : t < PSTEP[2] ? 2 : t < PSTEP[3] ? 3 : 4;
+    cls(P.listen, 'press', t >= P_LISTEN && t < P_SHEET);
+    cls(P.sheet, 'on', t >= P_SHEET && step === 1);
+    cls(P.go, 'press', t >= P_GO && t < P_GO + 0.45);
+    const note = t >= P_NOTE;
+    cls(P.vHome, 'on', step === 1);
+    cls(P.vRec, 'on', (step === 2 || step === 4) && !note);
+    cls(P.vLock, 'on', step === 3);
+    cls(P.vNote, 'on', note);
+    const rec = step > 1 && !note;
+    cls(P.phone, 'rec', rec);
+    cls(P.phone, 'lock', step === 3);
+    const secs = Math.min(P_LEN, Math.max(0, Math.floor((t - PSTEP[1]) * P_RATE)));
+    txt(P.timer, clock(secs));
+    txt(P.lTimer, clock(secs));
+    plines.forEach((l, i) => {
+      const dt = t - P_LINE_AT[i];
+      cls(l.n, 'on', dt >= 0);
+      const n = Math.max(0, Math.min(l.words.length, Math.ceil(dt * 9)));
+      txt(l.s, l.words.slice(0, n).join(' '));
+    });
+    cls(P.stop, 'press', t >= P_STOP && t < P_NOTE);
+    const written = t >= P_WRITTEN;
+    cls(P.pPill, 'gone', written);
+    cls(P.pBusy, 'on', note && !written);
+    cls(P.pAi, 'on', written);
+    pRows.forEach((row, i) => cls(row, 'on', t >= P_WRITTEN + 0.15 + i * 0.3));
+    cls(P.pYours, 'on', t >= P_WRITTEN + 0.15 + pRows.length * 0.3);
+    return step;
+  }
+
+  const PH = MAC_END + 0.3;                  // when the iPhone starts
+  const FADE = PH + P_WRITTEN + 5, END = FADE + 0.6;
+  const STARTS = [...STEP, ...PSTEP.map((s) => PH + s)];
+
+  function render(t) {
+    const phone = t >= PH;
+    const step = phone ? 5 + renderPhone(t - PH) : renderMac(t);
+    if (phone) renderMac(MAC_REST); else renderPhone(0);
+    set('step', step, (v) => { demo.dataset.step = v; });
+    set('dev', phone, (v) => { demo.dataset.dev = v ? 'phone' : 'mac'; });
+    pills.forEach((li, i) => { cls(li, 'on', i + 1 === step); cls(li, 'done', i + 1 < step); });
+    cls(demo, 'out', t >= FADE);
+  }
+
+  // With motion off there is no story to watch, so both devices show their finished frames.
+  function renderStill(i) {
+    renderMac(i == null || i >= 4 ? MAC_END - 0.1 : STEP[i + 1] - 0.3);
+    renderPhone(i == null || i < 5 ? P_WRITTEN + 4 : i < 8 ? PSTEP[i - 4] - 0.3 : P_WRITTEN + 4);
+    const step = i == null ? 5 : i + 1;
+    demo.dataset.step = step;
+    demo.dataset.dev = step > 5 ? 'phone' : 'mac';
+    demo.dataset.still = '';
+    pills.forEach((li, j) => { cls(li, 'on', j + 1 === step); cls(li, 'done', j + 1 < step); });
   }
 
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -118,12 +190,13 @@
   demo.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => {
     const i = +b.dataset.go;
     // With motion off, a pill shows that step's finished frame instead of playing it.
-    t = reduced.matches ? (i < 4 ? STEP[i + 1] - 0.3 : FADE - 0.1) : STEP[i] + (i ? 0 : 0.3);
+    if (reduced.matches) { renderStill(i); return; }
+    t = STARTS[i] + (i === 0 || i === 5 ? 0.3 : 0);
     render(t);
   }));
 
   if (fixed) { t = +fixed[1]; render(t); }
-  else if (reduced.matches) render(FADE - 0.1);
+  else if (reduced.matches) renderStill();
   else render(0);
   demo.classList.add('ready');
 
@@ -131,6 +204,6 @@
     new IntersectionObserver((es) => { visible = es[es.length - 1].isIntersecting; tick(); }, { threshold: 0.05 }).observe(demo);
   }
   document.addEventListener('visibilitychange', tick);
-  reduced.addEventListener && reduced.addEventListener('change', () => { if (reduced.matches) render(FADE - 0.1); tick(); });
+  reduced.addEventListener && reduced.addEventListener('change', () => { if (reduced.matches) renderStill(); else delete demo.dataset.still; tick(); });
   tick();
 })();
