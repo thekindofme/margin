@@ -13,7 +13,7 @@ Without the Apple secrets the build still works but is unsigned, and the release
 
 ## Cut a release
 
-1. Pick the version (semver). Update it in **all** of: `src-tauri/tauri.conf.json` (`version`) and `Cargo.toml` (`[workspace.package] version`). Run `cargo build` so `Cargo.lock` follows.
+1. Pick the version (semver). Update it in **all** of: `src-tauri/tauri.conf.json` (`version`), `Cargo.toml` (`[workspace.package] version`) and `.claude-plugin/plugin.json` (`version`; Claude Code plugin users only get updates when it changes). Run `cargo build` so `Cargo.lock` follows.
 2. In `CHANGELOG.md`, rename the Unreleased heading to the version and date, and add a fresh Unreleased section.
 3. Commit, push to `main` and wait for CI to pass.
 4. Tag and push:

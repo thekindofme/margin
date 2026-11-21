@@ -15,21 +15,41 @@ Local-first AI meeting notes for macOS, written in Rust. An open-source alternat
 
 ## For agents: CLI, MCP and skill
 
-Milkrice exposes your meetings to Claude Code, Codex and any MCP client. Access is read-only, and every piece of content is labelled with its source:
+Milkrice exposes your meetings to Claude Code, Codex, Cursor, OpenCode, VS Code (Copilot) and any MCP client. Access is read-only, and every piece of content is labelled with its source:
 
 - **NOTES**: what you typed.
 - **AI SUMMARY**: written by an LLM, which is named.
 - **TRANSCRIPT**: speech-to-text from a named model. Your own lines are marked `(user)`.
 
-To connect, use **Settings → Agents**. It installs the `milkrice` command, then for Claude Code or Codex it registers the MCP server and installs the skill (`skills/milkrice/SKILL.md`).
+**Connect from the app:** Settings → Agents → **Connect**. It installs the `milkrice` command if needed, registers the MCP server and installs the skill ([`skills/milkrice/SKILL.md`](skills/milkrice/SKILL.md)).
+
+**Connect from a terminal:**
+
+| Agent | Command |
+|---|---|
+| Claude Code (plugin) | `claude plugin marketplace add thekindofme/milkrice` then `claude plugin install milkrice@milkrice` |
+| Claude Code (direct) | `milkrice agents install claude` |
+| Codex | `milkrice agents install codex` |
+| Cursor | `milkrice agents install cursor` |
+| OpenCode | `milkrice agents install opencode` |
+| VS Code (Copilot) | `milkrice agents install vscode` |
+| Any agent that reads `~/.agents/skills` | `milkrice agents install skill` |
+| Any MCP client | `{"command": "milkrice", "args": ["mcp"]}` |
+
+On Claude Code 2.1.275 or later, `claude plugin install milkrice --marketplace thekindofme/milkrice` (or `/plugin install milkrice --marketplace thekindofme/milkrice` inside a session) does the plugin install in one step. The plugin needs the Milkrice app installed; it runs the app's `milkrice mcp`.
+
+`milkrice agents install all` connects every agent it finds. `milkrice agents status` shows what is connected and flags problems, and `milkrice agents uninstall <agent|all>` reverses it. The installer only adds or removes its own `milkrice` entry, backs a config file up (`<file>.milkrice-backup-<time>`) before changing it, and can be re-run safely. Use the plugin or the direct install for Claude Code, not both.
+
+If you installed the DMG, `milkrice` goes in `~/.local/bin`, which a new zsh doesn't put on PATH. `milkrice agents status` tells you when that's the case and how to fix it; MCP works either way because it is registered with the full path. Homebrew links `milkrice` into `/opt/homebrew/bin`.
 
 | Command | What it gives you |
 |---|---|
-| `milkrice ls [-q TEXT] [--since 7d]` | One line per meeting, with which content exists |
+| `milkrice ls [-q TEXT] [--since 7d] [-f FOLDER]` | One line per meeting, with which content exists |
+| `milkrice folders` | Your folders and how many meetings each holds |
 | `milkrice show ID [notes,ai,transcript\|all]` | Labelled sections; transcript left out by default |
 | `milkrice tx ID [--from mm:ss --to mm:ss --speaker NAME --grep TEXT]` | Only the transcript lines you need |
 | `milkrice search TEXT [--in notes\|ai\|transcript]` | Hits say where they matched |
-| `milkrice mcp` | MCP server on stdio: `list_meetings`, `get_meeting`, `get_transcript`, `search` |
+| `milkrice mcp` | MCP server on stdio with 5 tools: `list_meetings`, `list_folders`, `get_meeting`, `get_transcript`, `search` |
 
 ## Install
 
@@ -61,9 +81,13 @@ crates/milkrice-core   the engine (no UI)
   detect.rs          "is a meeting app using the mic?"
   llm.rs             Claude Code / Codex / Ollama runners + prompts
   store.rs           SQLite (WAL) storage
+  agents_install.rs  installs the CLI, MCP entries and skill for each agent
+  mcp.rs             the read-only MCP server
   bin/milkrice-cli.rs  headless tool, including a full pipeline simulator
 src-tauri            the desktop app: commands, scheduler, tray, notifications
 ui                   the interface: plain HTML/CSS/JS, no build step
+skills/milkrice      the agent skill (also embedded in the CLI)
+.claude-plugin       Claude Code plugin + marketplace (scripts/milkrice-mcp is its MCP entry)
 design               brand notes and Codex-generated artwork
 ```
 
