@@ -1,7 +1,7 @@
 {
   "name": "milkrice",
   "displayName": "Milkrice meetings",
-  "version": "0.1.0-rc1",
+  "version": "0.1.0",
   "description": "Read-only access to meetings recorded by Milkrice on this Mac: your notes, AI summaries and transcripts, each labelled by source. Needs the Milkrice app (brew install --cask thekindofme/tap/milkrice).",
   "author": {
     "name": "Milkrice",
