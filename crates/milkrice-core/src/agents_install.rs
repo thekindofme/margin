@@ -294,9 +294,9 @@ fn remove_cli(env: &Env, log: &mut Log) -> Result<()> {
 
 /// When `~/.local/bin/milkrice` is a link into an app bundle that no longer exists (the app was
 /// moved), point it at this build's milkrice-cli. Returns true if it was repaired.
-pub fn repair_cli_link(env: &Env) -> bool {
-    let link = env.local_bin().join("milkrice");
-    let (Ok(target), Some(bundled)) = (std::fs::read_link(&link), env.bundled_cli.as_ref()) else { return false };
+pub fn repair_cli_link(home: &Path, bundled: Option<&Path>) -> bool {
+    let link = home.join(".local/bin/milkrice");
+    let (Ok(target), Some(bundled)) = (std::fs::read_link(&link), bundled) else { return false };
     if target.exists() || !bundled.is_file() || target.file_name().is_none_or(|n| n != "milkrice-cli") {
         return false;
     }
@@ -1192,9 +1192,9 @@ mod tests {
         let dir = env.home.join(".local/bin");
         std::fs::create_dir_all(&dir).unwrap();
         std::os::unix::fs::symlink(env.home.join("Old/Milkrice.app/Contents/MacOS/milkrice-cli"), dir.join("milkrice")).unwrap();
-        assert!(repair_cli_link(env));
+        assert!(repair_cli_link(&env.home, env.bundled_cli.as_deref()));
         assert_eq!(std::fs::read_link(dir.join("milkrice")).unwrap(), env.bundled_cli.clone().unwrap());
-        assert!(!repair_cli_link(env), "a working link is left alone");
+        assert!(!repair_cli_link(&env.home, env.bundled_cli.as_deref()), "a working link is left alone");
     }
 
     #[test]

@@ -3,7 +3,7 @@ use crate::state::{AppState, Settings};
 use crate::{recorder, scheduler};
 
 use milkrice_core::store::{ChatMessage, Folder, Meeting, MeetingSummary};
-use milkrice_core::{audio, catalog, llm, models, CalEvent, Segment};
+use milkrice_core::{agents_install, audio, catalog, llm, models, CalEvent, Segment};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -772,184 +772,43 @@ pub async fn ask_all(app: AppHandle, question: String) -> R<String> {
 }
 
 // ------------------------------------------------------------------ agents (CLI, MCP, skill)
+// The logic lives in milkrice_core::agents_install, shared with `milkrice agents …`.
 
-fn cli_path() -> Option<std::path::PathBuf> {
+/// The milkrice-cli shipped next to this app's binary.
+pub fn cli_path() -> Option<std::path::PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let p = exe.parent()?.join("milkrice-cli");
     p.is_file().then_some(p)
 }
 
-fn home() -> std::path::PathBuf {
-    dirs::home_dir().unwrap_or_default()
-}
-
-fn agent_cli_ok(bin: &str, args: &[&str]) -> bool {
-    std::process::Command::new(bin)
-        .args(args)
-        .env("PATH", llm::shell_path())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+fn agents_env() -> agents_install::Env {
+    agents_install::Env::from_system(cli_path())
 }
 
 #[tauri::command]
 pub async fn agents_status() -> R<Value> {
-    blocking(|| {
-        let link = home().join(".local/bin/milkrice");
-        let cli = cli_path();
-        let installed = std::fs::read_link(&link).ok().zip(cli.clone()).map(|(a, b)| a == b).unwrap_or(false);
-        let which = |n: &str| which::which_in(n, Some(llm::shell_path()), "/").is_ok();
-        Ok(json!({
-            "cli_bundled": cli.is_some(),
-            "cli_installed": installed,
-            "cli_path": link.to_string_lossy(),
-            "claude_available": which("claude"),
-            "claude_connected": agent_cli_ok("claude", &["mcp", "get", "milkrice"]) && home().join(".claude/skills/milkrice/SKILL.md").exists(),
-            "codex_available": which("codex"),
-            "codex_connected": agent_cli_ok("codex", &["mcp", "get", "milkrice"]) && home().join(".codex/skills/milkrice/SKILL.md").exists(),
-        }))
-    })
-    .await
+    blocking(|| Ok(serde_json::to_value(agents_install::status(&agents_env()))?)).await
 }
 
-/// One-click agent setup. target: "cli" | "claude" | "codex".
+/// One-click agent setup. target: cli | claude | codex | cursor | opencode | vscode.
+/// Agent targets also install the `milkrice` command, which the skill relies on.
 #[tauri::command]
-pub async fn agent_connect(app: AppHandle, target: String) -> R<String> {
-    let skill_src = app
-        .path()
-        .resource_dir()
-        .map_err(e)?
-        .join("skill/milkrice/SKILL.md");
+pub async fn agent_connect(target: String) -> R<String> {
     blocking(move || {
-        let cli = cli_path().ok_or_else(|| anyhow::anyhow!("milkrice-cli isn't bundled in this build"))?;
-        let install_skill = |dir: std::path::PathBuf| -> anyhow::Result<()> {
-            std::fs::create_dir_all(&dir)?;
-            std::fs::copy(&skill_src, dir.join("SKILL.md"))?;
-            Ok(())
-        };
-        let run = |bin: &str, args: Vec<String>| -> anyhow::Result<()> {
-            let out = std::process::Command::new(bin).args(&args).env("PATH", llm::shell_path()).output()?;
-            anyhow::ensure!(
-                out.status.success() || String::from_utf8_lossy(&out.stderr).contains("already exists"),
-                "{bin} failed: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            );
-            Ok(())
-        };
-        let cli_s = cli.to_string_lossy().to_string();
-        match target.as_str() {
-            "cli" => {
-                let dir = home().join(".local/bin");
-                std::fs::create_dir_all(&dir)?;
-                remove_legacy_cli_link(&dir);
-                let link = dir.join("milkrice");
-                let _ = std::fs::remove_file(&link);
-                std::os::unix::fs::symlink(&cli, &link)?;
-                Ok(format!("Installed {}", link.display()))
+        let t = agents_install::Target::parse(&target)?;
+        let log = agents_install::install(&agents_env(), t)?;
+        Ok(match t {
+            agents_install::Target::Cli => match agents_install::resolve_command(&agents_env()) {
+                Some((p, _)) => format!("`milkrice` is installed at {}", p.display()),
+                None => "Installed the milkrice command".into(),
+            },
+            _ => {
+                let what = if log.changed.is_empty() { "was already connected" } else { "can now read your meetings (MCP + skill)" };
+                format!("{} {what}. Restart it to pick up the change.", t.label())
             }
-            "claude" => {
-                remove_legacy_mcp("claude", &["mcp", "remove", "-s", "user", "margin"]);
-                remove_legacy_skill(&home().join(".claude/skills/margin"));
-                let _ = run("claude", vec!["mcp".into(), "remove".into(), "-s".into(), "user".into(), "milkrice".into()]);
-                run("claude", vec!["mcp".into(), "add".into(), "-s".into(), "user".into(), "milkrice".into(), "--".into(), cli_s, "mcp".into()])?;
-                install_skill(home().join(".claude/skills/milkrice"))?;
-                Ok("Claude Code can now read your meetings (MCP + skill)".into())
-            }
-            "codex" => {
-                remove_legacy_mcp("codex", &["mcp", "remove", "margin"]);
-                remove_legacy_skill(&home().join(".codex/skills/margin"));
-                let _ = run("codex", vec!["mcp".into(), "remove".into(), "milkrice".into()]);
-                run("codex", vec!["mcp".into(), "add".into(), "milkrice".into(), "--".into(), cli_s, "mcp".into()])?;
-                install_skill(home().join(".codex/skills/milkrice"))?;
-                Ok("Codex can now read your meetings (MCP + skill)".into())
-            }
-            _ => anyhow::bail!("unknown target"),
-        }
+        })
     })
     .await
-}
-
-/// True if a symlink target is the pre-rename (Margin) CLI: inside a Margin.app bundle, or a
-/// binary called margin-cli. Anything else (a user's own `margin` tool) is left alone.
-fn is_legacy_cli_target(target: &std::path::Path) -> bool {
-    let in_old_app = target.components().any(|c| c.as_os_str() == "Margin.app");
-    in_old_app || target.file_name().map(|n| n == "margin-cli").unwrap_or(false)
-}
-
-/// Remove ~/.local/bin/margin only when it is a symlink to the old Margin CLI.
-fn remove_legacy_cli_link(dir: &std::path::Path) {
-    let old = dir.join("margin");
-    if let Ok(target) = std::fs::read_link(&old) {
-        if is_legacy_cli_target(&target) {
-            let _ = std::fs::remove_file(&old);
-        }
-    }
-}
-
-/// Unregister an MCP server named "margin" only if its command is the old margin-cli.
-fn remove_legacy_mcp(bin: &str, remove_args: &[&str]) {
-    let out = std::process::Command::new(bin).args(["mcp", "get", "margin"]).env("PATH", llm::shell_path()).output();
-    if let Ok(o) = out {
-        let text = String::from_utf8_lossy(&o.stdout).to_string() + &String::from_utf8_lossy(&o.stderr);
-        if o.status.success() && text.contains("margin-cli") {
-            let _ = std::process::Command::new(bin).args(remove_args).env("PATH", llm::shell_path()).output();
-        }
-    }
-}
-
-/// Remove the old skill folder (~/.claude/skills/margin etc.) if it is the one we installed.
-fn remove_legacy_skill(dir: &std::path::Path) {
-    let skill = dir.join("SKILL.md");
-    if std::fs::read_to_string(&skill).map(|t| t.lines().take(3).any(|l| l.trim() == "name: margin")).unwrap_or(false) {
-        let _ = std::fs::remove_file(&skill);
-        let _ = std::fs::remove_dir(dir); // only succeeds if now empty
-    }
-}
-
-#[cfg(test)]
-mod legacy_tests {
-    use super::*;
-    use std::path::Path;
-
-    #[test]
-    fn recognises_old_cli_targets() {
-        assert!(is_legacy_cli_target(Path::new("/Applications/Margin.app/Contents/MacOS/margin-cli")));
-        assert!(is_legacy_cli_target(Path::new("/x/target/release/margin-cli")));
-        assert!(!is_legacy_cli_target(Path::new("/Applications/Milkrice.app/Contents/MacOS/milkrice-cli")));
-        assert!(!is_legacy_cli_target(Path::new("/usr/local/bin/margin")));
-    }
-
-    #[test]
-    fn removes_only_stale_symlink() {
-        let d = std::env::temp_dir().join(format!("milkrice-legacy-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&d).unwrap();
-        let link = d.join("margin");
-        std::os::unix::fs::symlink("/Applications/Margin.app/Contents/MacOS/margin-cli", &link).unwrap();
-        remove_legacy_cli_link(&d);
-        assert!(std::fs::symlink_metadata(&link).is_err());
-        std::os::unix::fs::symlink("/opt/tools/margin", &link).unwrap();
-        remove_legacy_cli_link(&d);
-        assert!(std::fs::symlink_metadata(&link).is_ok());
-        let _ = std::fs::remove_dir_all(&d);
-    }
-
-    #[test]
-    fn removes_only_our_old_skill() {
-        let d = std::env::temp_dir().join(format!("milkrice-skill-{}", uuid::Uuid::new_v4()));
-        let ours = d.join("margin");
-        std::fs::create_dir_all(&ours).unwrap();
-        std::fs::write(ours.join("SKILL.md"), "---\nname: margin\n---\n").unwrap();
-        remove_legacy_skill(&ours);
-        assert!(!ours.exists());
-        let theirs = d.join("other");
-        std::fs::create_dir_all(&theirs).unwrap();
-        std::fs::write(theirs.join("SKILL.md"), "---\nname: something-else\n---\n").unwrap();
-        remove_legacy_skill(&theirs);
-        assert!(theirs.join("SKILL.md").exists());
-        let _ = std::fs::remove_dir_all(&d);
-    }
 }
 
 // ------------------------------------------------------------------ Obsidian / second brain

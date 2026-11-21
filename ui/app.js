@@ -1401,7 +1401,7 @@ function renderSettings(v) {
   <h2>Obsidian &amp; second brain</h2><p class="desc">Mirror every meeting into your vault as plain Markdown — summary, your notes and transcript, with attendees as [[links]]. Anything you add outside Milkrice's block is never touched.</p>
   <div id="obsBox"><p class="hint">Looking for vaults…</p></div>
 
-  <h2>Agents</h2><p class="desc">Let Claude Code, Codex or any MCP client read your meetings. Your notes, AI summaries and speech transcripts stay clearly labelled so agents never confuse them.</p>
+  <h2>Agents</h2><p class="desc">Let Claude Code, Codex, Cursor, OpenCode, VS Code or any MCP client read your meetings. Your notes, AI summaries and speech transcripts stay clearly labelled so agents never confuse them.</p>
   <div id="agentsBox"><p class="hint">Checking…</p></div>
 
   <h2>Audio</h2>
@@ -1513,11 +1513,22 @@ async function loadAgents() {
   const row = (key, name, desc, ok, avail, label) => `<div class="provider ${ok ? "on" : ""}"><span class="status ${ok ? "ok" : ""}"></span>
     <div class="pi"><b>${name}</b><span>${desc}</span></div>
     ${ok ? '<span class="badge sage">Connected</span>' : avail ? `<button class="btn small" data-agent="${key}">${label}</button>` : '<span class="hint">Not installed</span>'}</div>`;
+  const agent = (id, name, desc) => {
+    const g = a.agents.find((x) => x.target === id) || {};
+    const warn = (g.warnings || [])[0];
+    return row(id, name, desc + (warn ? ` ${esc(warn)}` : ""), g.connected, g.detected, "Connect");
+  };
+  const cliWhere = a.cli_installed ? `Installed at ${esc(a.command)}.` : `Installs to ${esc(a.cli_link)}.`;
+  const both = "Adds the Milkrice MCP server and the milkrice skill.";
   box.innerHTML =
-    row("cli", "<code>milkrice</code> command", `Token-efficient CLI for any agent or script: <code>milkrice ls</code>, <code>show</code>, <code>tx</code>, <code>search</code>. Installs to ${esc(a.cli_path)}.`, a.cli_installed, a.cli_bundled, "Install") +
-    row("claude", "Claude Code", "Adds the Milkrice MCP server and the milkrice skill.", a.claude_connected, a.claude_available, "Connect") +
-    row("codex", "Codex", "Adds the Milkrice MCP server and the milkrice skill.", a.codex_connected, a.codex_available, "Connect") +
-    `<p class="hint">Any other MCP client: run <code>milkrice mcp</code> over stdio. Access is read-only.</p>`;
+    row("cli", "<code>milkrice</code> command", `Token-efficient CLI for any agent or script: <code>milkrice ls</code>, <code>show</code>, <code>tx</code>, <code>search</code>. ${cliWhere}`, a.cli_installed, a.cli_bundled, "Install") +
+    (a.path_hint ? `<p class="hint">${esc(a.path_hint)}</p>` : "") +
+    agent("claude", "Claude Code", a.claude_plugin ? `Connected through the Milkrice plugin (${esc(a.claude_plugin)}).` : both) +
+    agent("codex", "Codex", both) +
+    agent("cursor", "Cursor", both) +
+    agent("opencode", "OpenCode", both) +
+    agent("vscode", "VS Code", "Adds the MCP server and skill for GitHub Copilot.") +
+    `<p class="hint">Connect also installs the <code>milkrice</code> command. Any other MCP client: run <code>milkrice mcp</code> over stdio. Access is read-only. To undo, run <code>milkrice agents uninstall</code> with the agent's name.</p>`;
   box.querySelectorAll("[data-agent]").forEach((b) => (b.onclick = async () => {
     b.disabled = true; b.textContent = "Connecting…";
     try { toast(await invoke("agent_connect", { target: b.dataset.agent }), 3500); } catch (e) { fail(e); }

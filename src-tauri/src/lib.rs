@@ -55,6 +55,13 @@ pub fn run() {
                 }
             });
             scheduler::spawn(handle.clone());
+            // If the app was moved, ~/.local/bin/milkrice may point at the old location: fix it.
+            std::thread::spawn(|| {
+                let home = dirs::home_dir().unwrap_or_default();
+                if milkrice_core::agents_install::repair_cli_link(&home, commands::cli_path().as_deref()) {
+                    log::info!("repointed ~/.local/bin/milkrice at this app");
+                }
+            });
             // Look for a newer release a few seconds after launch (silent unless one exists).
             {
                 let h = handle.clone();

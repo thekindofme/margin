@@ -90,7 +90,17 @@
     autostart_set: ({ on }) => (db.autostart = on),
     dismiss_prompt: () => null,
     ask_all: async () => { await new Promise(r=>setTimeout(r,600)); return "- The beta ships **Friday** (Beta launch sync, Sat 31 Oct)\n- Sam owns the release notes"; },
-    agents_status: () => ({ cli_bundled: true, cli_installed: false, cli_path: "~/.local/bin/milkrice", claude_available: true, claude_connected: true, codex_available: true, codex_connected: false }),
+    agents_status: () => ({
+      cli_bundled: true, cli_installed: false, cli_link: "~/.local/bin/milkrice", command: null, path_hint: null, claude_plugin: null,
+      agents: [
+        { target: "claude", detected: true, connected: true, warnings: [] },
+        { target: "codex", detected: true, connected: false, warnings: [] },
+        { target: "cursor", detected: true, connected: false, warnings: [] },
+        { target: "opencode", detected: false, connected: false, warnings: [] },
+        { target: "vscode", detected: true, connected: false, warnings: [] },
+        { target: "skill", detected: true, connected: false, warnings: [] },
+      ],
+    }),
     agent_connect: () => "Connected",
     audio_devices: () => ({ inputs: ["MacBook Air Microphone", "AirPods Pro", "Shure MV7"], default_input: "MacBook Air Microphone", default_output: "AirPods Pro", selected: null, active: "MacBook Air Microphone", capture_system: true }),
     set_mic: () => null,
