@@ -1,0 +1,14 @@
+{
+  "name": "milkrice",
+  "description": "Milkrice, local-first meeting notes for macOS.",
+  "owner": {
+    "name": "Milkrice"
+  },
+  "plugins": [
+    {
+      "name": "milkrice",
+      "source": "./",
+      "description": "Read-only access to your Milkrice meetings (notes, AI summaries, transcripts) through MCP and a skill."
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+#!/bin/sh
+# MCP entry point for the Milkrice Claude Code plugin. Finds the milkrice CLI that the Milkrice
+# app installs and runs its stdio MCP server. Ships no server of its own.
+for bin in \
+  /opt/homebrew/bin/milkrice \
+  /usr/local/bin/milkrice \
+  "$HOME/.local/bin/milkrice" \
+  /Applications/Milkrice.app/Contents/MacOS/milkrice-cli \
+  "$HOME/Applications/Milkrice.app/Contents/MacOS/milkrice-cli"; do
+  if [ -x "$bin" ]; then
+    exec "$bin" mcp "$@"
+  fi
+done
+if bin=$(command -v milkrice 2>/dev/null); then
+  exec "$bin" mcp "$@"
+fi
+echo "Milkrice isn't installed. Install it with: brew install --cask thekindofme/tap/milkrice" >&2
+echo "or download it from https://github.com/thekindofme/milkrice/releases/latest" >&2
+exit 1

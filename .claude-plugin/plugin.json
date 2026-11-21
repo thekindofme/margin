@@ -1,0 +1,28 @@
+{
+  "name": "milkrice",
+  "displayName": "Milkrice meetings",
+  "version": "0.1.0-rc1",
+  "description": "Read-only access to meetings recorded by Milkrice on this Mac: your notes, AI summaries and transcripts, each labelled by source. Needs the Milkrice app (brew install --cask thekindofme/tap/milkrice).",
+  "author": {
+    "name": "Milkrice",
+    "url": "https://milkrice.yasithfernando.com"
+  },
+  "homepage": "https://milkrice.yasithfernando.com/agents.html",
+  "repository": "https://github.com/thekindofme/milkrice",
+  "license": "MIT",
+  "keywords": [
+    "meetings",
+    "transcripts",
+    "notes",
+    "mcp",
+    "macos",
+    "local-first"
+  ],
+  "icon": "./src-tauri/icons/icon.png",
+  "mcpServers": {
+    "milkrice": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/milkrice-mcp",
+      "args": []
+    }
+  }
+}
