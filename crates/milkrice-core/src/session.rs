@@ -74,6 +74,7 @@ pub struct Session {
     paused: Arc<AtomicBool>,
     elapsed: Arc<AtomicU64>,
     segmenter: Option<JoinHandle<()>>,
+    #[allow(clippy::type_complexity)]
     worker: Option<JoinHandle<(SpeakerClusterer, Vec<(String, String)>)>>,
     started: Instant,
     pub system_active: bool,
@@ -259,6 +260,7 @@ impl Session {
         Self::run_pipeline(cfg, frame_rx, captures, Default::default(), None, true, engine, embedder, sink)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn run_pipeline(
         cfg: SessionConfig,
         frame_rx: Receiver<AudioFrame>,
@@ -812,6 +814,7 @@ mod tests {
         const LONG_REMOTE: &str = "Yeah so I think that's right in principle, but honestly we should ship the beta \
             on Friday after QA signs off and then see what the numbers look like next week";
         // (name, system lines, mic line, expected echo)
+        #[allow(clippy::type_complexity)]
         let cases: &[(&str, &[(u64, u64, &str)], (u64, u64, &str), bool)] = &[
             (
                 "true echo of a long remote line",

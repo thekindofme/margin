@@ -37,7 +37,7 @@ pub fn find_meeting_url(text: &str) -> Option<String> {
         let end = tail
             .find(|c: char| c.is_whitespace() || matches!(c, '<' | '>' | '"' | '\'' | ')' | ']' | '\\'))
             .unwrap_or(tail.len());
-        let candidate = tail[..end].trim_end_matches(|c: char| matches!(c, '.' | ',' | ';' | '>'));
+        let candidate = tail[..end].trim_end_matches(['.', ',', ';', '>']);
         if is_meeting_host(host_of(candidate)) {
             return Some(candidate.to_string());
         }

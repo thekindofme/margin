@@ -33,7 +33,7 @@ fn download(id: &str) -> Result<()> {
     let cancel = AtomicBool::new(false);
     let mut last = 0u64;
     models::download(spec, &cancel, |d, t| {
-        let pct = if t > 0 { d * 100 / t } else { 0 };
+        let pct = (d * 100).checked_div(t).unwrap_or(0);
         if pct >= last + 10 || d == t {
             eprintln!("  {id}: {pct}% ({} / {} MB)", d >> 20, t >> 20);
             last = pct;

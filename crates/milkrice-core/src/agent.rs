@@ -295,6 +295,7 @@ pub fn transcript_lines(
     out.trim_end().to_string()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn transcript(store: &Store, id: &str, from: Option<u64>, to: Option<u64>, speaker: Option<&str>, grep: Option<&str>, limit: usize, as_json: bool) -> Result<String> {
     let m = resolve(store, id)?;
     let segs = store.segments(&m.id)?;

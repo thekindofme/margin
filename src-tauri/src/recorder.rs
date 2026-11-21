@@ -131,7 +131,8 @@ pub fn new_meeting(state: &AppState, title: &str, event: Option<&CalEvent>) -> R
 
 /// Bumped whenever folders or filing change, so cached suggestions are recomputed.
 pub static FOLDERS_VERSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-static SUGGESTIONS: parking_lot::Mutex<Option<std::collections::HashMap<String, (u64, Option<milkrice_core::store::Folder>)>>> =
+type SuggestionCache = std::collections::HashMap<String, (u64, Option<milkrice_core::store::Folder>)>;
+static SUGGESTIONS: parking_lot::Mutex<Option<SuggestionCache>> =
     parking_lot::Mutex::new(None);
 
 pub fn folders_changed() {
