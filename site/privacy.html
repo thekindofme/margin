@@ -41,8 +41,8 @@
     </aside>
     <article class="doc-body">
       <h1>Privacy</h1>
-      <p class="updated">Last updated 16 November 2026</p>
-      <div class="note"><p><strong>The short version.</strong> We don't collect anything. Milkrice has no account, no telemetry, no analytics and no server of ours. Your notes, transcripts and audio stay on your Mac. Text leaves your Mac only when Milkrice asks the AI provider you chose to write something, and that goes to the provider under your own account.</p></div>
+      <p class="updated">Last updated 21 November 2026</p>
+      <div class="note"><p><strong>The short version.</strong> We don't collect anything. Milkrice has no account, no telemetry, no analytics and no server of ours. Your notes, transcripts and audio stay on your Mac and iPhone. Text leaves your Mac only when Milkrice asks the AI provider you chose to write something, and that goes to the provider under your own account.</p></div>
 
       <h2>What we collect</h2>
       <p>Nothing. The people who make Milkrice do not receive your meetings, notes, transcripts, audio, calendar, contacts, usage data or crash reports. There is no sign-in and no licence check that phones home.</p>
@@ -87,6 +87,16 @@
 
       <h3>Your agents</h3>
       <p>If you connect Milkrice to Claude Code or Codex from Settings, those agents can read your meetings through the <code>milkrice</code> command or MCP server, on your Mac and read-only. Anything an agent reads becomes part of that agent's session, which is handled by its provider under your account.</p>
+
+      <h2>The iPhone app (beta)</h2>
+      <p>The iPhone app works the same way: no account, no telemetry, nothing sent to us.</p>
+      <ul>
+        <li><strong>Storage.</strong> Meetings, notes and transcripts are kept inside the app on your iPhone, with iOS file protection. Recordings are deleted once they're transcribed unless you turn on "Keep audio". Deleting the app deletes everything.</li>
+        <li><strong>Transcription</strong> uses Apple's on-device speech model. iOS may download that model from Apple the first time.</li>
+        <li><strong>Notes</strong> are written on the iPhone with Apple Intelligence, where your iPhone supports it.</li>
+        <li><strong>Permissions:</strong> the microphone, speech recognition, and the camera, which is used only to scan the pairing code your Mac shows.</li>
+        <li><strong>Sync with your Mac</strong> is off until you pair. When it's on, meetings travel through a folder in your own iCloud Drive, end-to-end encrypted with a key that only your paired devices hold. Apple stores the encrypted files and can't read them. Audio is synced only if you turn that on. If you ask your Mac to write a note, the Mac sends it to the AI provider chosen there, as described above.</li>
+      </ul>
 
       <h2>Children</h2>
       <p>Milkrice isn't directed at children and we don't knowingly collect anyone's information, children's included.</p>

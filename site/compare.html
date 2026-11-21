@@ -33,7 +33,7 @@
     <article class="doc-body">
       <h1>How Milkrice compares</h1>
       <p class="updated">Last checked 20 November 2026. Prices and features change; if something here is wrong, <a href="https://github.com/thekindofme/milkrice/issues">open an issue</a> and we'll fix it.</p>
-      <p><strong>Milkrice in one line:</strong> free, MIT-licensed meeting notes for Apple Silicon Macs. Both sides of the call are transcribed on your Mac, and the notes are written by the Claude Code or Codex you already use, or by Ollama with nothing leaving your machine.</p>
+      <p><strong>Milkrice in one line:</strong> free, MIT-licensed meeting notes for Apple Silicon Macs, with an iPhone app in beta. Both sides of the call are transcribed on your Mac, and the notes are written by the Claude Code or Codex you already use, or by Ollama with nothing leaving your machine.</p>
 
       <h2>Cloud notetakers</h2>
       <div class="cmp-wrap">
@@ -46,7 +46,7 @@
             <tr><th scope="row">Account needed</th><td class="me y">No</td><td class="n">Yes</td><td class="n">Yes</td><td class="n">Yes</td><td class="n">Yes</td><td class="n">Yes</td></tr>
             <tr><th scope="row">Open source</th><td class="me y">MIT</td><td class="n">No</td><td class="n">No</td><td class="n">No</td><td class="n">No</td><td class="n">No</td></tr>
             <tr><th scope="row">Agent access</th><td class="me y">Local CLI + MCP, free</td><td class="p">Hosted MCP; transcripts on paid plans</td><td class="p">Hosted MCP</td><td class="p">Hosted MCP + API</td><td class="p">MCP + API</td><td class="p">MCP + API on Pro</td></tr>
-            <tr><th scope="row">Platforms</th><td class="me">Mac (Apple Silicon)</td><td>Mac, Windows, iPhone</td><td>Web, desktop, iOS, Android</td><td>Web, desktop, mobile</td><td>Web, Mac, iOS</td><td>Mac, Windows, iPhone</td></tr>
+            <tr><th scope="row">Platforms</th><td class="me">Mac (Apple Silicon), iPhone (beta)</td><td>Mac, Windows, iPhone</td><td>Web, desktop, iOS, Android</td><td>Web, desktop, mobile</td><td>Web, Mac, iOS</td><td>Mac, Windows, iPhone</td></tr>
           </tbody>
         </table>
       </div>
@@ -60,7 +60,7 @@
             <tr><th scope="row">Licence</th><td class="me y">MIT</td><td class="p">MIT, open core</td><td class="y">MIT</td><td class="y">MIT</td><td class="y">MIT</td><td class="y">MIT</td></tr>
             <tr><th scope="row">Price</th><td class="me">Free</td><td>Free; PRO $10/mo</td><td>Free</td><td>Free</td><td>Free</td><td>Free</td></tr>
             <tr><th scope="row">Where audio is processed</th><td class="me y">Your Mac</td><td class="y">Your computer</td><td class="y">Your computer</td><td class="y">Your computer, LLM included</td><td class="y">Your Mac</td><td class="p">Your Mac; cloud speech optional</td></tr>
-            <tr><th scope="row">Platforms</th><td class="me">Mac</td><td>Mac, Windows, Linux</td><td>Mac; CLI on Linux</td><td>Mac, Windows, Linux</td><td>Mac</td><td>Mac</td></tr>
+            <tr><th scope="row">Platforms</th><td class="me">Mac, iPhone (beta)</td><td>Mac, Windows, Linux</td><td>Mac; CLI on Linux</td><td>Mac, Windows, Linux</td><td>Mac</td><td>Mac</td></tr>
             <tr><th scope="row">Agent access</th><td class="me y">CLI + MCP + skill, free</td><td class="n">MCP and CLI are PRO only</td><td class="y">Large MCP + CLI + Claude Code plugin</td><td class="p">Read-only MCP, off by default</td><td class="p">CLI + agent plugins</td><td class="p">CLI</td></tr>
           </tbody>
         </table>
@@ -72,13 +72,14 @@
         <li><strong>Your existing AI writes the notes.</strong> Milkrice hands the transcript to the Claude Code or Codex you're already signed into, so there's no new subscription or API key. Choose Ollama and nothing leaves your Mac at all.</li>
         <li><strong>Your agents can use your meetings, for free.</strong> A read-only <code>milkrice</code> CLI and MCP server let Claude Code, Codex and others search your meetings. Every passage is labelled as your notes, the AI summary or the transcript, so an agent never mistakes a model's guess for what you wrote.</li>
         <li><strong>No biometric storage.</strong> Speakers are told apart on your Mac, and their voiceprints are never written to disk.</li>
+        <li><strong>A phone app that keeps audio on the phone.</strong> The iPhone app transcribes on the device with Apple's speech models and writes notes with Apple Intelligence, again with no account. Cloud notetakers upload what your phone hears.</li>
         <li><strong>Light and native.</strong> Written in Rust, about 100 MB of memory when idle.</li>
       </ul>
 
       <h2>Where others are better</h2>
       <ul>
-        <li><strong>Other platforms.</strong> Milkrice runs only on Apple Silicon Macs. Most alternatives also run on Windows, and several on Linux or phones.</li>
-        <li><strong>In-person meetings on a phone.</strong> Granola, Otter, Fireflies, Fathom and Jamie can record a meeting from your phone. Milkrice can't yet.</li>
+        <li><strong>Other platforms.</strong> Milkrice runs on Apple Silicon Macs and, in beta, on iPhone. Most alternatives also run on Windows, and several on Linux or Android.</li>
+        <li><strong>A finished phone app.</strong> The Milkrice iPhone app records conversations in the room and transcribes them on the phone, but it's still in beta. Granola, Otter, Fireflies, Fathom and Jamie have shipped phone apps for years.</li>
         <li><strong>Teams.</strong> Shared workspaces, link sharing, CRM sync and admin controls. Milkrice is for one person.</li>
         <li><strong>Zero setup.</strong> Granola needs a sign-in and nothing else. Milkrice needs three macOS permissions, a model download, and Claude Code, Codex or Ollama for written notes. Transcription works without any of those.</li>
         <li><strong>Accuracy on hard audio.</strong> Large cloud speech models handle heavy accents, crosstalk and noisy rooms better than a small local model.</li>
@@ -86,8 +87,8 @@
       </ul>
 
       <h2>Choosing</h2>
-      <p><strong>Choose Milkrice if</strong> you're on an Apple Silicon Mac, you want audio to stay on your machine, and you'd rather use the AI subscription you already have than add another one.</p>
-      <p><strong>Choose something else if</strong> you need Windows or a phone app, team sharing or CRM sync, or a tool that works with no setup.</p>
+      <p><strong>Choose Milkrice if</strong> you're on an Apple Silicon Mac (and maybe an iPhone), you want audio to stay on your machine, and you'd rather use the AI subscription you already have than add another one.</p>
+      <p><strong>Choose something else if</strong> you need Windows, Linux or Android, team sharing or CRM sync, or a tool that works with no setup.</p>
       <p>With any notetaker that doesn't join as a bot, telling people you're taking notes is your responsibility. See <a href="consent.html">recording consent</a>.</p>
 
       <p class="src">Sources: vendor pricing, security and documentation pages, and each project's GitHub repository, checked on 20 November 2026. Granola, Otter, Fireflies, Fathom, Jamie and Anarlog are trademarks of their owners; this page isn't affiliated with any of them.</p>
