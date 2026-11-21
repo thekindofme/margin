@@ -1,0 +1,37 @@
+[package]
+name = "milkrice-sync"
+description = "End-to-end encrypted iPhone <-> Mac sync for Milkrice: format, crypto, pairing, merge."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = []
+# The `milkrice-sync` command (pairing, sync loop, notes for the iPhone). Pulls in milkrice-core.
+desktop = ["dep:milkrice-core", "dep:rusqlite", "dep:qrcode", "dep:security-framework", "dep:dirs"]
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chacha20poly1305 = "0.10"
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+hkdf = "0.12"
+hmac = "0.12"
+sha2 = "0.10"
+rand = "0.8"
+base64 = "0.22"
+hex = "0.4"
+chrono = "0.4"
+milkrice-core = { path = "../milkrice-core", optional = true }
+rusqlite = { version = "0.37", features = ["bundled"], optional = true }
+qrcode = { version = "0.14", default-features = false, optional = true }
+dirs = { version = "6", optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = { version = "3", optional = true }
+
+[[bin]]
+name = "milkrice-sync"
+path = "src/bin/milkrice-sync.rs"
+required-features = ["desktop"]

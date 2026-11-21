@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/milkrice-core", "src-tauri"]
+members = ["crates/milkrice-core", "crates/milkrice-sync", "src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
