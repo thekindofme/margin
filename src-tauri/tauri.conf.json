@@ -67,7 +67,7 @@
       }
     },
     "resources": {
-      "../skill/milkrice/SKILL.md": "skill/milkrice/SKILL.md"
+      "../skills/milkrice/SKILL.md": "skills/milkrice/SKILL.md"
     },
     "copyright": "Copyright © 2026 Yasith Fernando. MIT License.",
     "homepage": "https://milkrice.yasithfernando.com",

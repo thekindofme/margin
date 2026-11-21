@@ -21,7 +21,7 @@ Milkrice exposes your meetings to Claude Code, Codex and any MCP client. Access 
 - **AI SUMMARY**: written by an LLM, which is named.
 - **TRANSCRIPT**: speech-to-text from a named model. Your own lines are marked `(user)`.
 
-To connect, use **Settings → Agents**. It installs the `milkrice` command, then for Claude Code or Codex it registers the MCP server and installs the skill (`skill/milkrice/SKILL.md`).
+To connect, use **Settings → Agents**. It installs the `milkrice` command, then for Claude Code or Codex it registers the MCP server and installs the skill (`skills/milkrice/SKILL.md`).
 
 | Command | What it gives you |
 |---|---|

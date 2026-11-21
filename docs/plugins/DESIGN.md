@@ -224,7 +224,7 @@ milkrice plugin logs talk-coach
 
 Agents also get:
 - **Docs:** `docs/plugins/PROTOCOL.md` (short, example-first) and the JSON Schema.
-- **Skill:** a "Write a Milkrice plugin" section in `skill/milkrice/SKILL.md`.
+- **Skill:** a "Write a Milkrice plugin" section in `skills/milkrice/SKILL.md`.
 - **Examples:** two example plugins in `plugins/examples/`: `talk-coach` (Python) and `after-meeting-webhook` (Node).
 
 ## The talk coach as a plugin

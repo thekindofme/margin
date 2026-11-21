@@ -9,7 +9,7 @@ CLI="$(cd "$(dirname "$CLI")" && pwd)/$(basename "$CLI")"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/bin" "$T/proj/.claude/skills/milkrice"
 ln -s "$CLI" "$T/bin/milkrice"
-cp "$ROOT/skill/milkrice/SKILL.md" "$T/proj/.claude/skills/milkrice/"
+cp "$ROOT/skills/milkrice/SKILL.md" "$T/proj/.claude/skills/milkrice/"
 pass=0; fail=0
 check() { if grep -qiE "$2" <<<"$3"; then echo "PASS  $1"; pass=$((pass+1)); else echo "FAIL  $1"; echo "$3" | head -20; fail=$((fail+1)); fi; }
 

@@ -1,11 +1,14 @@
 ---
 name: milkrice
 description: Read the user's meetings recorded by Milkrice (local meeting-notes app) — list meetings, read the user's own notes, AI summaries and speech-to-text transcripts, and search across them. Use when the user asks about a meeting, call, 1:1, standup, what someone said, decisions, action items, or follow-ups ("what did we decide with Priya?", "summarise yesterday's calls", "draft a follow-up from my last meeting").
+compatibility: macOS; requires the Milkrice app and the milkrice CLI
 ---
 
 # Milkrice meetings
 
 Milkrice records meetings on this Mac. Access is read-only through the `milkrice` CLI (or the `milkrice` MCP server if it's configured, which has the same tools).
+
+If `milkrice` isn't found, try `/opt/homebrew/bin/milkrice`, `~/.local/bin/milkrice` or `/Applications/Milkrice.app/Contents/MacOS/milkrice-cli`. If none exists, the user needs to install Milkrice (`brew install --cask thekindofme/tap/milkrice`).
 
 ## Three sources — never mix them up
 
