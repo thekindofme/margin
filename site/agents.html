@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="canonical" href="https://milkrice.yasithfernando.com/agents.html">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Connect your agents — Milkrice</title>
+<meta name="description" content="One-line setup to let Claude Code, Codex, Cursor, OpenCode, VS Code or any MCP client read your Milkrice meetings, read-only.">
+<meta name="theme-color" content="#fbf5e6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14120e" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="assets/favicon.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..600,100;1,9..144,300..600,100&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/site.css?v=21">
+<style>
+  /* Page-local: command rows sit on their own line and wrap instead of truncating. */
+  .doc-body .brew { display: flex; margin: 4px 0 14px; border-radius: 14px; }
+  .doc-body .brew code { white-space: normal; overflow-wrap: anywhere; flex: 1; }
+  .doc-body .file { margin: 8px 0 14px; box-shadow: inset 0 0 0 1px var(--hair); }
+  .doc-body .file-tab button { margin-left: auto; border: 0; cursor: pointer; border-radius: 999px; padding: 6px 11px; background: var(--cream-2); color: var(--ink); font: 600 12px/1 var(--sans); }
+  .doc-body .file-tab button:hover { background: var(--cream-3); }
+  .doc-body .file-tab button[data-done] { background: var(--leaf-soft); color: var(--leaf-deep); }
+  .doc-body h2 { scroll-margin-top: 24px; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+  <header class="top wrap">
+    <a class="brand" href="./"><img src="assets/app-icon.webp" alt="" width="30" height="30">Milkrice</a>
+    <nav class="nav" aria-label="Site">
+    <a href="./#how">How it works</a>
+    <a href="./#privacy">Privacy</a>
+    <a href="./#ai">Your AI</a>
+    <a href="./#agents" aria-current="page">Agents</a>
+    <a href="./#compare">Compare</a>
+    <a href="./#faq">FAQ</a>
+    <a href="https://github.com/thekindofme/milkrice">GitHub</a>
+  </nav>
+  <a class="btn btn-sm" href="https://github.com/thekindofme/milkrice/releases/latest">Download</a>
+  </header>
+  <main id="main" class="doc wrap">
+    <aside class="doc-aside">
+      <nav aria-label="Agents on this page">
+        <a href="#claude">Claude Code</a>
+        <a href="#codex">Codex</a>
+        <a href="#cursor">Cursor</a>
+        <a href="#opencode">OpenCode</a>
+        <a href="#vscode">VS Code</a>
+        <a href="#skill">Other agents</a>
+        <a href="#mcp">Any MCP client</a>
+        <a href="#manage">Check and undo</a>
+      </nav>
+    </aside>
+    <article class="doc-body">
+      <h1>Connect your agents</h1>
+      <p class="updated">Read-only access to your meetings, set up with one line per agent.</p>
+      <p>Milkrice gives agents three things: the <code>milkrice</code> command, an MCP server (<code>milkrice mcp</code>, five read-only tools) and a skill that teaches agents to use them. Everything an agent reads is labelled as <strong>NOTES</strong> (what you typed), <strong>AI SUMMARY</strong> (written by a named model) or <strong>TRANSCRIPT</strong> (speech-to-text), so it never mistakes a model's summary for something you wrote. Nothing leaves your Mac unless your agent sends it to its own model.</p>
+
+      <p>First, install Milkrice. Homebrew also puts <code>milkrice</code> on your PATH:</p>
+      <div class="brew"><code id="c-brew">brew install --cask thekindofme/tap/milkrice</code><button type="button" data-copy="c-brew" aria-label="Copy the Homebrew command">Copy</button></div>
+      <p>If you'd rather not use a terminal, open Milkrice, go to <strong>Settings → Agents</strong> and press <strong>Connect</strong> next to your agent. It installs the <code>milkrice</code> command too.</p>
+
+      <h2 id="claude">Claude Code</h2>
+      <p>Install the plugin. It adds the MCP server and the skill, and updates with Milkrice releases:</p>
+      <div class="brew"><code id="c-claude-mkt">claude plugin marketplace add thekindofme/milkrice</code><button type="button" data-copy="c-claude-mkt" aria-label="Copy the command">Copy</button></div>
+      <div class="brew"><code id="c-claude-plugin">claude plugin install milkrice@milkrice</code><button type="button" data-copy="c-claude-plugin" aria-label="Copy the command">Copy</button></div>
+      <p>Inside a Claude Code session, the same thing is <code>/plugin marketplace add thekindofme/milkrice</code> followed by <code>/plugin install milkrice@milkrice</code>.</p>
+      <p>Or register it directly, without the plugin. Use one or the other, not both:</p>
+      <div class="brew"><code id="c-claude">milkrice agents install claude</code><button type="button" data-copy="c-claude" aria-label="Copy the command">Copy</button></div>
+      <p>Then ask something like “what did we decide in yesterday's design sync?”</p>
+
+      <h2 id="codex">Codex</h2>
+      <p>Registers the MCP server in <code>~/.codex/config.toml</code> and installs the skill in <code>~/.agents/skills</code>:</p>
+      <div class="brew"><code id="c-codex">milkrice agents install codex</code><button type="button" data-copy="c-codex" aria-label="Copy the command">Copy</button></div>
+      <p>MCP only, with Codex's own command:</p>
+      <div class="brew"><code id="c-codex-mcp">codex mcp add milkrice -- milkrice mcp</code><button type="button" data-copy="c-codex-mcp" aria-label="Copy the command">Copy</button></div>
+
+      <h2 id="cursor">Cursor</h2>
+      <p>Adds Milkrice to <code>~/.cursor/mcp.json</code> (your other servers stay as they are) and installs the skill:</p>
+      <div class="brew"><code id="c-cursor">milkrice agents install cursor</code><button type="button" data-copy="c-cursor" aria-label="Copy the command">Copy</button></div>
+      <p>Or <a class="btn btn-sm btn-line" href="cursor://anysphere.cursor-deeplink/mcp/install?name=milkrice&amp;config=eyJjb21tYW5kIjoibWlsa3JpY2UiLCJhcmdzIjpbIm1jcCJdfQ%3D%3D">Add to Cursor</a> — this one runs <code>milkrice</code> from your PATH, so it needs the Homebrew install.</p>
+
+      <h2 id="opencode">OpenCode</h2>
+      <p>Adds Milkrice to OpenCode's global config (<code>~/.config/opencode/opencode.json</code>) and installs the skill in <code>~/.agents/skills</code>, which OpenCode reads:</p>
+      <div class="brew"><code id="c-opencode">milkrice agents install opencode</code><button type="button" data-copy="c-opencode" aria-label="Copy the command">Copy</button></div>
+
+      <h2 id="vscode">VS Code (GitHub Copilot)</h2>
+      <p>Adds Milkrice to Copilot's global MCP config (<code>~/.copilot/mcp-config.json</code>) and the skill to <code>~/.copilot/skills</code>:</p>
+      <div class="brew"><code id="c-vscode">milkrice agents install vscode</code><button type="button" data-copy="c-vscode" aria-label="Copy the command">Copy</button></div>
+      <p>MCP only, with VS Code's own command:</p>
+      <div class="brew"><code id="c-vscode-mcp">code --add-mcp '{"name":"milkrice","type":"stdio","command":"milkrice","args":["mcp"]}'</code><button type="button" data-copy="c-vscode-mcp" aria-label="Copy the command">Copy</button></div>
+
+      <h2 id="skill">Other agents</h2>
+      <p>Many agents that run shell commands read skills from <code>~/.agents/skills</code>. This installs the skill there (and in <code>~/.claude/skills</code>):</p>
+      <div class="brew"><code id="c-skill">milkrice agents install skill</code><button type="button" data-copy="c-skill" aria-label="Copy the command">Copy</button></div>
+      <p>To put the skill somewhere else, <code>milkrice skill</code> prints it.</p>
+
+      <h2 id="mcp">Any MCP client</h2>
+      <p>Milkrice's MCP server runs over stdio. Most clients take a block like this:</p>
+      <div class="file">
+        <div class="file-tab">mcp.json<button type="button" data-copy="c-json" aria-label="Copy the MCP JSON">Copy</button></div>
+<pre id="c-json">{
+  "mcpServers": {
+    "milkrice": {
+      "command": "milkrice",
+      "args": ["mcp"]
+    }
+  }
+}</pre>
+      </div>
+      <p>Apps opened from the Dock may not see your shell's PATH. If yours can't start <code>milkrice</code>, use the full path that <code>milkrice agents status</code> prints, such as <code>/opt/homebrew/bin/milkrice</code>.</p>
+      <p>The tools are <code>list_meetings</code>, <code>list_folders</code>, <code>get_meeting</code>, <code>get_transcript</code> and <code>search</code>, all marked read-only.</p>
+
+      <h2 id="manage">Check and undo</h2>
+      <p>See what's connected, where each entry lives, and anything that needs fixing:</p>
+      <div class="brew"><code id="c-status">milkrice agents status</code><button type="button" data-copy="c-status" aria-label="Copy the command">Copy</button></div>
+      <p>Connect every agent Milkrice finds, or remove everything it added:</p>
+      <div class="brew"><code id="c-all">milkrice agents install all</code><button type="button" data-copy="c-all" aria-label="Copy the command">Copy</button></div>
+      <div class="brew"><code id="c-undo">milkrice agents uninstall all</code><button type="button" data-copy="c-undo" aria-label="Copy the command">Copy</button></div>
+      <ul>
+        <li><strong>Only its own entry.</strong> The installer adds or removes the <code>milkrice</code> entry and leaves everything else in your config files alone.</li>
+        <li><strong>Backups.</strong> Before it changes an existing file, it saves a copy next to it as <code>&lt;file&gt;.milkrice-backup-&lt;time&gt;</code>.</li>
+        <li><strong>Safe to repeat.</strong> Running an install again changes nothing. Add <code>--dry-run</code> to see what would change.</li>
+        <li><strong>PATH.</strong> Without Homebrew, <code>milkrice</code> goes in <code>~/.local/bin</code>, which a new zsh doesn't include. <code>milkrice agents status</code> says when that's the case and how to fix it. MCP works either way, because it's registered with the full path.</li>
+        <li><strong>Who can read your meetings.</strong> The MCP server talks only to the agent that started it, over stdio; it opens no port. Any program running as you could already read Milkrice's files, so your Mac user account is what protects them.</li>
+      </ul>
+
+      <p class="src">Claude Code, Codex, Cursor, OpenCode, VS Code and GitHub Copilot are trademarks of their owners. Milkrice isn't affiliated with any of them.</p>
+    </article>
+  </main>
+  <footer class="foot">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="assets/app-icon.webp" alt="" width="22" height="22" loading="lazy">Milkrice</a>
+    <div class="foot-body">
+      <p>This site has no cookies, analytics or trackers, so there's nothing to accept.</p>
+      <p><a href="./">Back to the home page</a></p>
+    </div>
+  </div>
+</footer>
+<script src="js/site.js?v=3" defer></script>
+</body>
+</html>
