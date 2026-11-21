@@ -415,8 +415,18 @@ pub async fn start_event(app: AppHandle, event: CalEvent, record: bool) -> R<Str
 // ------------------------------------------------------------------ meetings
 
 #[tauri::command]
-pub fn list_meetings(state: State<AppState>, query: Option<String>) -> R<Vec<MeetingSummary>> {
-    state.store.list_meetings(query.as_deref(), 500).map_err(e)
+pub fn list_meetings(state: State<AppState>, query: Option<String>) -> R<Vec<MeetingRow>> {
+    let phone = milkrice_sync::desktop::iphone_meetings();
+    let rows = state.store.list_meetings(query.as_deref(), 500).map_err(e)?;
+    Ok(rows.into_iter().map(|m| MeetingRow { from_iphone: phone.contains(&m.id), m }).collect())
+}
+
+#[derive(Serialize)]
+pub struct MeetingRow {
+    #[serde(flatten)]
+    m: MeetingSummary,
+    /// Recorded on a paired iPhone.
+    from_iphone: bool,
 }
 
 #[derive(Serialize)]
@@ -904,4 +914,46 @@ pub fn export_markdown(state: State<AppState>, id: String, save: bool) -> R<Stri
     let path = dir.join(name);
     std::fs::write(&path, md).map_err(e)?;
     Ok(path.to_string_lossy().to_string())
+}
+
+// ---------- iPhone sync
+
+#[tauri::command]
+pub async fn sync_status() -> R<Value> {
+    tauri::async_runtime::spawn_blocking(crate::sync::status).await.map_err(e)
+}
+
+#[tauri::command]
+pub async fn sync_setup(folder: Option<String>) -> R<Value> {
+    tauri::async_runtime::spawn_blocking(move || crate::sync::setup(folder)).await.map_err(e)?.map_err(e)
+}
+
+#[tauri::command]
+pub async fn sync_pair_start() -> R<Value> {
+    tauri::async_runtime::spawn_blocking(crate::sync::pair_start).await.map_err(e)?.map_err(e)
+}
+
+#[tauri::command]
+pub fn sync_pair_poll() -> R<Option<milkrice_sync::desktop::Joining>> {
+    crate::sync::pair_poll().map_err(e)
+}
+
+#[tauri::command]
+pub async fn sync_pair_accept() -> R<String> {
+    tauri::async_runtime::spawn_blocking(crate::sync::pair_accept).await.map_err(e)?.map_err(e)
+}
+
+#[tauri::command]
+pub fn sync_pair_cancel() {
+    crate::sync::pair_cancel()
+}
+
+#[tauri::command]
+pub fn sync_now() {
+    crate::sync::wake()
+}
+
+#[tauri::command]
+pub fn sync_leave() -> R<()> {
+    crate::sync::leave().map_err(e)
 }

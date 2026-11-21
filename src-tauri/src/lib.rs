@@ -4,6 +4,7 @@ mod ics;
 mod recorder;
 mod scheduler;
 mod state;
+mod sync;
 mod tray;
 mod updater;
 
@@ -55,6 +56,7 @@ pub fn run() {
                 }
             });
             scheduler::spawn(handle.clone());
+            sync::spawn(handle.clone());
             // If the app was moved, ~/.local/bin/milkrice may point at the old location: fix it.
             std::thread::spawn(|| {
                 let home = dirs::home_dir().unwrap_or_default();
@@ -141,6 +143,14 @@ pub fn run() {
             commands::open_in_obsidian,
             commands::agents_status,
             commands::agent_connect,
+            commands::sync_status,
+            commands::sync_setup,
+            commands::sync_pair_start,
+            commands::sync_pair_poll,
+            commands::sync_pair_accept,
+            commands::sync_pair_cancel,
+            commands::sync_now,
+            commands::sync_leave,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Milkrice")

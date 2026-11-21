@@ -506,3 +506,18 @@ body:has(#devPop) #sysWarn { display: none; }
 .meta > a.chip:hover { border-color: var(--line-2); color: var(--ink); }
 
 .step .perms { background: none; }
+
+/* iPhone sync */
+.item .s .from-phone { display: inline-block; vertical-align: -2px; margin-right: 4px; }
+.item .s .from-phone svg, .dev-ic svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.dev-ic { width: 18px; display: inline-flex; justify-content: center; color: var(--ink-2); }
+.dev-ic svg { width: 16px; height: 16px; }
+.sync-err { color: var(--ember); }
+.pair { display: flex; gap: 22px; align-items: flex-start; padding: 16px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--card); }
+.pair-qr { flex: none; width: 196px; height: 196px; padding: 6px; border-radius: 10px; background: #fff; }
+.pair-qr svg { width: 100%; height: 100%; display: block; }
+.pair-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.pair-text b { font-weight: 560; }
+.pair-code { font: 600 34px/1.1 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 0.08em; margin: 4px 0 8px; }
+.pair-paste code { display: block; margin: 6px 0; padding: 6px 8px; font-size: 11px; word-break: break-all; background: var(--bg); border-radius: 6px; }
+.spin { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; border: 1.5px solid var(--line-2); border-top-color: var(--ember); border-radius: 50%; animation: spin 0.9s linear infinite; }

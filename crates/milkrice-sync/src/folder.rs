@@ -24,6 +24,7 @@ pub struct DeviceCard {
     pub last_seen: String,
 }
 
+#[derive(Clone)]
 pub struct Vault {
     pub root: PathBuf,
     pub vault_id: VaultId,

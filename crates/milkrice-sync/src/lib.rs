@@ -11,6 +11,8 @@
 //! Each device only writes files named after itself, so cloud providers never create
 //! "conflicted copy" files.
 pub mod crypto;
+#[cfg(feature = "desktop")]
+pub mod desktop;
 pub mod folder;
 pub mod merge;
 pub mod pair;

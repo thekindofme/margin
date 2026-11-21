@@ -33,7 +33,9 @@
     filed: flag("nofolders") ? [] : [["m1", "f1"], ["m4", "f2"]],
     series: [],
     dismissed: [],
+    sync: { setup: flag("sync"), phone: flag("sync") },
   };
+  db.meetings[2].from_iphone = true;
   const fcount = (id) => db.filed.filter(([, f]) => f === id).length;
   const foldersOf = (mid) => db.filed.filter(([m]) => m === mid).map(([, f]) => db.folders.find((x) => x.id === f)).filter(Boolean);
   const models = [
@@ -102,6 +104,19 @@
       ],
     }),
     agent_connect: () => "Connected",
+    // #sync starts with sync on and an iPhone paired; #nosync with iCloud off.
+    sync_status: () => db.sync.setup
+      ? { setup: true, icloud_available: true, folder: "/Users/alex/Library/Mobile Documents/com~apple~CloudDocs/Milkrice Sync", in_icloud: true, device_name: "Alex's MacBook Air", last_ok: iso(Date.now() - 40e3), error: null, pairing: false,
+          devices: [{ id: "a", name: "Alex's MacBook Air", kind: "mac", last_seen: iso(now), this_mac: true }, ...(db.sync.phone ? [{ id: "b", name: "Alex's iPhone", kind: "iphone", last_seen: iso(now - 300e3), this_mac: false }] : [])],
+          meetings_from_others: db.sync.phone ? 3 : 0, unreadable: 0 }
+      : { setup: false, icloud_available: !flag("nosync"), default_folder: "~/Library/Mobile Documents/com~apple~CloudDocs/Milkrice Sync", default_has_vault: false },
+    sync_setup: () => { db.sync.setup = true; return handlers.sync_status(); },
+    sync_pair_start: () => { db.sync.polls = 0; let r = ""; for (let y = 0; y < 25; y++) for (let x = 0; x < 25; x++) if ((x * 7 + y * 13 + x * y) % 3 === 0 || ((x < 7 || x > 17) && y < 7) || (x < 7 && y > 17)) r += `<rect x="${x}" y="${y}" width="1" height="1"/>`; return { qr: "milkrice-pair:v1:AbC123preview", svg: `<svg viewBox="-2 -2 29 29" xmlns="http://www.w3.org/2000/svg"><rect x="-2" y="-2" width="29" height="29" fill="#fff"/><g fill="#1d1b16">${r}</g></svg>` }; },
+    sync_pair_poll: () => (++db.sync.polls > 3 ? { name: "Alex's iPhone", code: "482915" } : null),
+    sync_pair_accept: () => { db.sync.phone = true; return "Alex's iPhone"; },
+    sync_pair_cancel: () => null,
+    sync_now: () => null,
+    sync_leave: () => { db.sync = { setup: false }; },
     audio_devices: () => ({ inputs: ["MacBook Air Microphone", "AirPods Pro", "Shure MV7"], default_input: "MacBook Air Microphone", default_output: "AirPods Pro", selected: null, active: "MacBook Air Microphone", capture_system: true }),
     set_mic: () => null,
     mic_test: () => null,

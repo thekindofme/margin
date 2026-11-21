@@ -26,6 +26,7 @@ const ICON = {
   people: '<svg viewBox="0 0 16 16"><circle cx="6" cy="5.5" r="2.3"/><path d="M2 13c.4-2.4 2-3.6 4-3.6s3.6 1.2 4 3.6M11 3.5a2.2 2.2 0 0 1 0 4.2M12.2 9.6c1.1.4 1.9 1.6 2 3.4"/></svg>',
   cal: '<svg viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3"/></svg>',
   folder: '<svg viewBox="0 0 16 16"><path d="M2 4.5c0-.6.4-1 1-1h3.2l1.5 1.6H13c.6 0 1 .4 1 1v6.4c0 .6-.4 1-1 1H3c-.6 0-1-.4-1-1z"/></svg>',
+  phone: '<svg viewBox="0 0 16 16"><rect x="4.5" y="1.5" width="7" height="13" rx="1.6"/><path d="M7 12.3h2"/></svg>',
   link: '<svg viewBox="0 0 16 16"><path d="M6.8 9.2a2.8 2.8 0 0 0 4 0l2-2a2.8 2.8 0 0 0-4-4l-.8.8M9.2 6.8a2.8 2.8 0 0 0-4 0l-2 2a2.8 2.8 0 0 0 4 4l.8-.8"/></svg>',
 };
 
@@ -224,7 +225,7 @@ function renderSidebar() {
     const who = m.attendees.filter((a) => !a.is_self).map((a) => a.name.split(" ")[0]).slice(0, 3).join(", ");
     h += `<button class="item ${S.meetingId === m.id && S.view === "note" ? "active" : ""}" data-meeting="${esc(m.id)}" draggable="true">
       <span class="t">${esc(m.title || "Untitled")}</span>
-      <span class="s">${fmtTime(m.created_at)}${m.duration_ms ? ` · ${fmtDur(m.duration_ms)}` : ""}${who ? ` · ${esc(who)}` : ""}</span>
+      <span class="s">${m.from_iphone ? `<i class="from-phone" title="Recorded on iPhone">${ICON.phone}</i>` : ""}${fmtTime(m.created_at)}${m.duration_ms ? ` · ${fmtDur(m.duration_ms)}` : ""}${who ? ` · ${esc(who)}` : ""}</span>
       ${rec ? '<span class="rec-dot"></span>' : ""}
     </button>`;
   }
@@ -1401,6 +1402,9 @@ function renderSettings(v) {
   <h2>Obsidian &amp; second brain</h2><p class="desc">Mirror every meeting into your vault as plain Markdown — summary, your notes and transcript, with attendees as [[links]]. Anything you add outside Milkrice's block is never touched.</p>
   <div id="obsBox"><p class="hint">Looking for vaults…</p></div>
 
+  <h2>iPhone sync</h2><p class="desc">Optional. Meetings you record with Milkrice for iPhone (beta) show up here, and yours show up there. They travel through a folder in your iCloud Drive, end-to-end encrypted with a key that only your paired devices hold.</p>
+  <div id="syncBox"><p class="hint">Checking…</p></div>
+
   <h2>Agents</h2><p class="desc">Let Claude Code, Codex, Cursor, OpenCode, VS Code or any MCP client read your meetings. Your notes, AI summaries and speech transcripts stay clearly labelled so agents never confuse them.</p>
   <div id="agentsBox"><p class="hint">Checking…</p></div>
 
@@ -1459,6 +1463,96 @@ async function loadObsidian() {
   };
 }
 
+function ago(t) {
+  if (!t) return "never";
+  const s = Math.max(0, (Date.now() - new Date(t).getTime()) / 1000);
+  if (s < 45) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
+async function loadSync() {
+  const box = $("#syncBox");
+  if (!box || S.pairing) return;
+  let st;
+  try { st = await invoke("sync_status"); } catch (e) { box.innerHTML = `<p class="hint">${esc(e)}</p>`; return; }
+  if (S.pairing || !$("#syncBox")) return;
+  if (!st.setup) {
+    box.innerHTML = (st.icloud_available
+      ? `<div class="provider"><span class="status"></span><div class="pi"><b>iCloud Drive</b><span>A “Milkrice Sync” folder that holds only sealed files. Apple can't read them, and there's no Milkrice server.</span></div><button class="btn small primary" id="syncOn">Turn on</button></div>`
+      : `<div class="callout">iCloud Drive is off on this Mac. Turn it on in System Settings › Apple Account › iCloud, or choose a folder your iPhone can also see.</div>`)
+      + `<button class="link" id="syncPick">Use another folder…</button>`;
+    const go = async (folder) => {
+      box.querySelectorAll("button").forEach((b) => (b.disabled = true));
+      try { await invoke("sync_setup", { folder }); toast("Sync is on. Now pair your iPhone."); loadSync(); } catch (e) { fail(e); loadSync(); }
+    };
+    const on = $("#syncOn");
+    if (on) on.onclick = () => go(null);
+    $("#syncPick").onclick = async () => {
+      const dir = await T.dialog?.open({ directory: true, multiple: false, title: "Choose a folder your iPhone can also see" }).catch(fail);
+      if (dir) go(dir);
+    };
+    return;
+  }
+  const where = st.in_icloud ? "iCloud Drive › " + esc(String(st.folder).split("/").pop()) : esc(st.folder);
+  const phones = (st.devices || []).filter((d) => !d.this_mac);
+  const health = st.error ? `<span class="sync-err">${esc(st.error)}</span>` : `Last synced ${ago(st.last_ok)}${st.meetings_from_others ? ` · ${st.meetings_from_others} meetings from other devices` : ""}`;
+  box.innerHTML = `
+    <div class="provider on"><span class="status ${st.error ? "" : "ok"}"></span><div class="pi"><b>${where}</b><span>${health}</span></div>
+      <button class="btn small" id="syncNow">Sync now</button></div>
+    ${phones.map((d) => `<div class="provider on"><span class="dev-ic">${d.kind === "mac" ? ICON.disk : ICON.phone}</span><div class="pi"><b>${esc(d.name)}</b><span>${d.kind === "mac" ? "Mac" : "iPhone"} · last seen ${ago(d.last_seen)}</span></div></div>`).join("")}
+    ${phones.length ? "" : `<div class="callout">No iPhone yet. Install Milkrice for iPhone, then pair it here.</div>`}
+    <div style="display:flex;gap:10px;align-items:center;margin-top:10px"><button class="btn small ${phones.length ? "" : "primary"}" id="syncPair">Pair an iPhone</button><button class="link" id="syncLeave">Stop syncing on this Mac</button></div>
+    <p class="hint" style="margin-top:8px">When your iPhone asks for notes, this Mac writes them with the AI chosen above. Meetings from the iPhone are mirrored to Obsidian too, if that's on.</p>`;
+  $("#syncNow").onclick = () => { invoke("sync_now"); toast("Syncing…", 1200); setTimeout(loadSync, 2500); };
+  $("#syncPair").onclick = () => startPairing();
+  $("#syncLeave").onclick = async () => {
+    if (!confirm("Stop syncing on this Mac? Your meetings stay here. The key is removed from this Mac, so you'd need to set up sync again to rejoin.")) return;
+    try { await invoke("sync_leave"); loadSync(); } catch (e) { fail(e); }
+  };
+}
+
+async function startPairing() {
+  const box = $("#syncBox");
+  let inv;
+  try { inv = await invoke("sync_pair_start"); } catch (e) { fail(e); return; }
+  const started = Date.now();
+  S.pairing = true;
+  const stop = async (cancel) => {
+    clearInterval(S.pairTimer); S.pairTimer = null; S.pairing = false;
+    if (cancel) await invoke("sync_pair_cancel").catch(() => {});
+    loadSync();
+  };
+  box.innerHTML = `<div class="pair">
+      <div class="pair-qr">${inv.svg}</div>
+      <div class="pair-text"><b>Scan this with your iPhone</b>
+        <ol class="steps-mini"><li>Open Milkrice on your iPhone.</li><li>Settings › Sync with Mac › <b>Pair with my Mac</b>.</li><li>Point the camera at this code.</li></ol>
+        <p class="hint" id="pairState"><span class="spin"></span> Waiting for your iPhone…</p>
+        <details class="pair-paste"><summary class="hint">No camera? Paste a code instead</summary><code>${esc(inv.qr)}</code> <button class="btn small" id="pairCopy">Copy</button></details>
+        <button class="link" id="pairCancel">Cancel</button></div></div>`;
+  $("#pairCancel").onclick = () => stop(true);
+  $("#pairCopy").onclick = () => navigator.clipboard.writeText(inv.qr).then(() => toast("Copied"));
+  S.pairTimer = setInterval(async () => {
+    if (!$("#syncBox")) { stop(true); return; }
+    if (Date.now() - started > 10 * 60 * 1000) { toast("Pairing timed out. Try again."); stop(true); return; }
+    let j;
+    try { j = await invoke("sync_pair_poll"); } catch (e) { fail(e); stop(true); return; }
+    if (!j) return;
+    clearInterval(S.pairTimer); S.pairTimer = null;
+    const t = $(".pair-text");
+    t.innerHTML = `<b>“${esc(j.name)}” wants to join</b>
+      <p>Check that your iPhone shows the same code:</p>
+      <p class="pair-code">${esc(j.code.slice(0, 3))} ${esc(j.code.slice(3))}</p>
+      <div style="display:flex;gap:10px;align-items:center"><button class="btn small primary" id="pairYes">The codes match</button><button class="link" id="pairNo">They don't match</button></div>`;
+    $("#pairYes").onclick = async () => {
+      try { const name = await invoke("sync_pair_accept"); toast(`Paired with ${name}`, 3500); } catch (e) { fail(e); }
+      stop(false);
+    };
+    $("#pairNo").onclick = () => { toast("Not paired. Nothing was shared."); stop(true); };
+  }, 1000);
+}
+
 async function loadCalendarSources() {
   const box = $("#calSources");
   if (!box) return;
@@ -1500,7 +1594,6 @@ async function loadCalendarSources() {
       S.settings = await invoke("get_settings");
       setTimeout(loadEvents, 1500);
       loadCalendarSources();
-  loadObsidian();
     } catch (e) { fail(e); add.disabled = false; add.textContent = "Add"; }
   };
 }
@@ -1578,6 +1671,8 @@ function bindSettings(v) {
     try { paintAs(!!(await invoke("autostart_set", { on: !as.classList.contains("on") }))); } catch (e) { fail(e); }
   };
   loadAgents();
+  loadObsidian();
+  loadSync();
   loadCalendarSources();
   if (S.settings.keep_audio) invoke("audio_storage").then((u) => { const el = $("#audioUsage"); if (el) el.textContent = `Using ${(u.bytes / 1048576).toFixed(u.bytes > 1e8 ? 0 : 1)} MB. Transcripts and notes are always kept.`; }).catch(() => {});
   bindModels(v);
@@ -1839,6 +1934,7 @@ function wireEvents() {
     toast(m, 5000);
   });
   listen("events-updated", () => loadEvents());
+  listen("sync-status", () => { if (S.view === "settings") loadSync(); });
   listen("engine", (e) => { if (!e.ready && e.error) toast(e.error, 5000); else if (e.ready) toast("Speech model ready"); });
   listen("download-progress", (p) => {
     S.progress[p.id] = { ...(S.progress[p.id] || {}), ...p };

@@ -2,7 +2,13 @@
 
 All notable changes to Milkrice are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## 0.1.0 (Unreleased)
+## Unreleased
+
+- iPhone sync (Settings › iPhone sync): pair Milkrice for iPhone (beta) with a QR code and a matching 6-digit code, then meetings sync both ways through iCloud Drive (or any shared folder), end-to-end encrypted with a key kept in each device's keychain. Meetings from the iPhone are marked in the sidebar, mirrored to Obsidian, and the Mac writes their notes with your chosen AI when the iPhone asks
+- Fix: the Obsidian section in Settings never finished loading ("Looking for vaults…"), so a vault could only be chosen during onboarding
+- Sync: the Mac keeps sending where each meeting was recorded, so a device paired later learns it, and never labels a meeting it received as recorded on the Mac
+
+## 0.1.0 (2026-11-21)
 
 First public release.
 

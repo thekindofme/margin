@@ -156,6 +156,7 @@ Injects a calendar meeting. The real scheduler auto-starts recording, auto-stops
   - A check for new Milkrice releases on GitHub (the app asks before installing anything).
   - When notes are written, the transcript text and your notes go to the AI you chose (Claude Code or Codex, using your own subscription). Choose Ollama to keep even that on-device.
 - **Obsidian:** export writes plain Markdown files into the folder you pick.
+- **iPhone sync (optional, off by default):** once you pair an iPhone, meetings sync through a folder in your iCloud Drive (or any folder you choose). Every file is end-to-end encrypted with a key that stays in each device's keychain, so Apple, or whoever hosts the folder, sees only sealed files with random names.
 
 ## License
 

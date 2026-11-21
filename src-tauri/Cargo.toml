@@ -14,6 +14,7 @@ tauri-build = { version = "2.7", features = [] }
 
 [dependencies]
 milkrice-core = { path = "../crates/milkrice-core" }
+milkrice-sync = { path = "../crates/milkrice-sync", features = ["desktop"] }
 tauri = { version = "2.12", features = ["tray-icon", "image-png", "macos-private-api", "protocol-asset"] }
 tauri-plugin-notification = "2.8"
 tauri-plugin-opener = "2.7"
